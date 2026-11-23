@@ -1,13 +1,17 @@
 """Real FastAPI, demo membership and SQL path with a deterministic model boundary."""
 
 import json
-import os
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
+from pydantic import SecretStr
 
+from app.core.demo_auth import _memberships
 from app.main import create_app
 from app.modules.ai import routes
+from app.modules.ai.database_answer import answer_from_database
+from app.modules.ai.facts import gather_facts
+from app.modules.ai.provider import ProviderQuotaExceeded
 
 
 class FakeProvider:
@@ -21,7 +25,7 @@ class FakeProvider:
 
 def _login(client: TestClient, username: str) -> str:
     response = client.post("/api/v1/demo/login", json={
-        "username": username, "password": os.environ["FLEETOPS_DEMO_PASSWORD"]},
+        "username": username},
         headers={"X-Demo-Request": "fleetops-ui"})
     assert response.status_code == 200
     return client.get("/api/v1/me").json()["carriers"][0]["id"]
@@ -102,3 +106,60 @@ def test_reader_cost_question_and_forbidden_mutation_use_no_model(monkeypatch) -
             for conversation_id in ids:
                 assert reader.delete(f"/api/v1/ai/conversations/{conversation_id}",
                                      headers=headers).status_code == 200
+
+
+def test_exhausted_provider_returns_grounded_database_answer(monkeypatch) -> None:
+    class ExhaustedProvider:
+        async def answer(self, question, history, facts):
+            raise ProviderQuotaExceeded("AI provider credit is exhausted")
+
+    monkeypatch.setattr(routes, "get_provider", lambda: ExhaustedProvider())
+    monkeypatch.setattr(routes, "get_settings", lambda: type("Settings", (), {
+        "openai_api_key": SecretStr("test-only-key")})())
+    conversation_id = str(uuid4())
+    app = create_app()
+    with TestClient(app) as creator:
+        tenant = _login(creator, "demo_creator")
+        headers = {"X-Tenant-Id": tenant, "X-Demo-Request": "fleetops-ui"}
+        try:
+            response = creator.post("/api/v1/ai/chat", headers=headers,
+                                    json=_request(conversation_id, "Where was DEMO-101 last seen?"))
+            assert response.status_code == 200
+            assert "AI provider credit is exhausted" in response.text
+            assert "verified database records" in response.text
+            events = _events(response)
+            sources = next(item["data"] for item in events if item["type"] == "data-sources")
+            assert any(row["view"] == "GPS" for row in sources["records"])
+            history = creator.get(f"/api/v1/ai/conversations/{conversation_id}", headers=headers)
+            assert history.status_code == 200
+            assert "verified database records" in history.text
+        finally:
+            assert creator.delete(f"/api/v1/ai/conversations/{conversation_id}",
+                                  headers=headers).status_code == 200
+
+
+def test_named_asset_and_trip_questions_resolve_from_tenant_tables() -> None:
+    member = _memberships("demo_creator", UUID("11111111-1111-4111-8111-111111111111"))[0]
+    assets = next(fact["assets"] for fact in gather_facts(member, "fleet")["facts"]
+                  if fact["tool"] == "getAvailableVehicles")
+    assert assets
+    asset = assets[0]
+    question = f"Tell me something about {asset['unit_number']}"
+    bundle = gather_facts(member, question)
+    answer = answer_from_database(question, bundle, "AI provider credit is exhausted.")
+    assert f"{asset['unit_number']}: {asset['asset_type']}, status {asset['status']}" in answer
+    assert any(source["kind"] == "asset" and source["id"] == str(asset["id"])
+               for source in bundle["sources"])
+    assert not any(source["kind"] == "carrier" for source in bundle["sources"])
+
+    assignments = next(fact["assignment_windows"] for fact in gather_facts(member, "trip")["facts"]
+                       if fact["tool"] == "getAvailableVehicles")
+    assert assignments
+    trip = assignments[0]
+    trip_question = f"Tell me something about {trip['trip_reference']}"
+    trip_bundle = gather_facts(member, trip_question)
+    trip_answer = answer_from_database(trip_question, trip_bundle, "AI provider credit is exhausted.")
+    assert f"{trip['trip_reference']}: truck {trip['truck_unit']}" in trip_answer
+    assert any(source["kind"] == "assignment" and source["id"] == str(trip["id"])
+               for source in trip_bundle["sources"])
+    assert not any(source["label"] == "1" for source in trip_bundle["sources"])

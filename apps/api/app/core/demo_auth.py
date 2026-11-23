@@ -26,7 +26,6 @@ _NAMES = {
 
 class Login(BaseModel):
     username: str
-    password: str
 
 
 @dataclass(frozen=True)
@@ -109,11 +108,8 @@ def require_demo_request(x_demo_request: str | None = Header(default=None)) -> N
 
 @router.post("/demo/login")
 def login(body: Login, response: Response, _: None = Depends(require_demo_request)) -> dict[str, str]:
-    settings = get_settings()
-    if body.username not in _SUBJECTS or not hmac.compare_digest(
-        body.password, settings.demo_password or ""
-    ):
-        raise HTTPException(401, "Invalid demo credentials")
+    if body.username not in _SUBJECTS:
+        raise HTTPException(401, "Unknown demo account")
     response.set_cookie(_COOKIE, _signed_session(body.username), max_age=8 * 3600,
                         httponly=True, samesite="strict", path="/api")
     return {"username": body.username}

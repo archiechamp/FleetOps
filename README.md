@@ -2,7 +2,7 @@
 
 ## Local operations demo
 
-Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/start_demo.ps1` from the repository root, then open <http://localhost:18080>. See [docs/demo.md](docs/demo.md) for sign-in, fleet and dispatch workflows, reports, read-only Copilot, and shutdown. The script creates ignored local credentials; no demo password or provider key is included in this repository.
+Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/start_demo.ps1` from the repository root, then open <http://localhost:18080>. The landing page leads to a passwordless local demo account picker and lets you carry an example question into the AI Copilot. See [docs/demo.md](docs/demo.md) for fleet and dispatch workflows, reports, Copilot, and shutdown. The script creates ignored SQL and session secrets; no provider key is included in this repository.
 
 **Version:** 1.5  
 **Prepared:** 2026-11-22  

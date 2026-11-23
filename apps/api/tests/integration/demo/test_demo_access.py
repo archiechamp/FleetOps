@@ -11,9 +11,8 @@ import httpx
 @contextmanager
 def _client(username: str) -> Iterator[tuple[httpx.Client, str]]:
     base = os.environ["FLEETOPS_DEMO_BASE_URL"].rstrip("/")
-    password = os.environ["FLEETOPS_DEMO_PASSWORD"]
     with httpx.Client(base_url=base, timeout=10) as client:
-        login = client.post("/api/v1/demo/login", json={"username": username, "password": password},
+        login = client.post("/api/v1/demo/login", json={"username": username},
                             headers={"X-Demo-Request": "fleetops-ui"})
         assert login.status_code == 200
         me = client.get("/api/v1/me")
@@ -49,3 +48,12 @@ def test_unauthenticated_inventory_is_rejected() -> None:
     with httpx.Client(base_url=base, timeout=10) as client:
         assert client.get("/api/v1/demo/assets", headers={
             "X-Tenant-Id": str(UUID(int=1))}).status_code == 401
+
+
+def test_unknown_demo_account_cannot_sign_in() -> None:
+    base = os.environ["FLEETOPS_DEMO_BASE_URL"].rstrip("/")
+    with httpx.Client(base_url=base, timeout=10) as client:
+        response = client.post("/api/v1/demo/login", json={"username": "unknown"},
+                               headers={"X-Demo-Request": "fleetops-ui"})
+        assert response.status_code == 401
+        assert client.get("/api/v1/me").status_code == 401

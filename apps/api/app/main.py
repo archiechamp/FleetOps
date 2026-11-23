@@ -8,8 +8,6 @@ from app.core.config import get_settings
 def create_app() -> FastAPI:
     settings = get_settings()
     if settings.env == "demo":
-        if not settings.demo_password or len(settings.demo_password) < 12:
-            raise RuntimeError("Demo password must be set and at least 12 characters")
         if not settings.demo_session_secret or len(settings.demo_session_secret) < 32:
             raise RuntimeError("Demo session secret must be set and at least 32 characters")
         if not settings.demo_runtime_password:

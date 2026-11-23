@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { VehicleRegistrationForm } from "../features/vehicles/VehicleRegistrationForm";
 import { DemoWorkspace, type DemoView } from "../features/demo/DemoWorkspace";
 import { CopilotPanel } from "../features/ai/CopilotPanel";
+import { LandingPage } from "../features/landing/LandingPage";
 import type { components } from "../../../../packages/api-contracts/vehicle-openapi";
 
 type Vehicle = components["schemas"]["Vehicle"];
@@ -25,7 +26,6 @@ export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [checking, setChecking] = useState(true);
   const [username, setUsername] = useState("demo_creator");
-  const [password, setPassword] = useState("");
   const [carrierId, setCarrierId] = useState("");
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [selected, setSelected] = useState<Vehicle | null>(null);
@@ -38,6 +38,9 @@ export function App() {
   const [showForm, setShowForm] = useState(false);
   const [view, setView] = useState<DemoView>("Overview");
   const [chatOpen, setChatOpen] = useState(false);
+  const [showLogin, setShowLogin] = useState(false);
+  const [entryQuestion, setEntryQuestion] = useState<string | null>(null);
+  const openCopilotAfterSignIn = useRef(false);
   const pending = useRef<{ key: string; payload: string } | null>(null);
   const scopeVersion = useRef(0);
 
@@ -60,7 +63,9 @@ export function App() {
     setSearch("");
     setShowForm(false);
     setView("Overview");
-    setChatOpen(false);
+    setChatOpen(openCopilotAfterSignIn.current);
+    if (!openCopilotAfterSignIn.current) setEntryQuestion(null);
+    openCopilotAfterSignIn.current = false;
     setFormVersion((value) => value + 1);
     pending.current = null;
     setError("");
@@ -84,11 +89,10 @@ export function App() {
     event.preventDefault();
     setError("");
     try {
-      await api("/demo/login", { method: "POST", body: JSON.stringify({ username, password }) });
+      await api("/demo/login", { method: "POST", body: JSON.stringify({ username }) });
       const session = await api<Me>("/me");
       setMe(session);
       setCarrierId(session.carriers[0]?.id ?? "");
-      setPassword("");
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "Sign-in failed");
     }
@@ -109,6 +113,9 @@ export function App() {
     setShowForm(false);
     setView("Overview");
     setChatOpen(false);
+    setShowLogin(false);
+    setEntryQuestion(null);
+    openCopilotAfterSignIn.current = false;
     pending.current = null;
     setError("");
     setNotice("");
@@ -148,6 +155,10 @@ export function App() {
     vehicle.unit_number.toLocaleLowerCase().includes(search.trim().toLocaleLowerCase())
   );
 
+  if (!checking && !me && !showLogin) return <LandingPage
+    onExplore={() => { setEntryQuestion(null); openCopilotAfterSignIn.current = false; setShowLogin(true); }}
+    onTryCopilot={(question) => { setEntryQuestion(question); openCopilotAfterSignIn.current = true; setShowLogin(true); }} />;
+
   return (
     <main id="main-content" className="mx-auto max-w-6xl p-6 md:p-10">
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-6">
@@ -156,22 +167,21 @@ export function App() {
           <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">Fleet vehicles</h1>
           <p className="mt-2 text-slate-600">Register and inspect trucks for an authorized carrier.</p>
         </div>
-        {me && <div className="flex gap-2"><button type="button" className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={() => setChatOpen(true)}>Ask Copilot</button>
+        {me && <div className="flex gap-2"><button type="button" className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={() => setChatOpen(true)}>Ask Fleet</button>
           <button className="rounded-lg border px-4 py-2 font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={signOut}>Sign out</button></div>}
       </header>
 
       {checking ? <p role="status">Checking demo session…</p> : !me ? (
         <section className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+          <button type="button" className="mb-4 text-sm font-semibold text-blue-700 underline" onClick={() => setShowLogin(false)}>Back to FleetOps</button>
           <h2 className="text-xl font-semibold">Sign in to demo</h2>
-          <p className="mt-2 text-sm text-slate-600">Use demo_creator or demo_reader and the local demo password.</p>
+          <p className="mt-2 text-sm text-slate-600">Choose a demo account to explore the local FleetOps workspace.</p>
           {error && <p role="alert" className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
           <form onSubmit={signIn} className="mt-5 grid gap-4">
             <div><label htmlFor="username" className="block font-medium">Account</label>
               <select id="username" className="mt-1 w-full rounded-lg border p-2" value={username} onChange={(event) => setUsername(event.target.value)}>
                 <option value="demo_creator">Demo creator</option><option value="demo_reader">Demo reader</option>
               </select></div>
-            <div><label htmlFor="password" className="block font-medium">Demo password</label>
-              <input id="password" type="password" required className="mt-1 w-full rounded-lg border p-2" value={password} onChange={(event) => setPassword(event.target.value)} /></div>
             <button className="rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700">Sign in</button>
           </form>
         </section>
@@ -195,7 +205,8 @@ export function App() {
           </nav>
           {chatOpen && carrier && <CopilotPanel key={carrierId} carrierId={carrierId} carrierName={carrier.name}
             canFinance={carrier.permissions.includes("demo.finance.read")}
-            onClose={() => setChatOpen(false)} onNavigate={(nextView) => { setView(nextView); setChatOpen(false); }} />}
+            initialQuestion={entryQuestion}
+            onClose={() => { setChatOpen(false); setEntryQuestion(null); }} onNavigate={(nextView) => { setView(nextView); setChatOpen(false); setEntryQuestion(null); }} />}
           <DemoWorkspace key={`${carrierId}:${view}`} view={view} carrierId={carrierId} canCreate={canCreate} canFinance={carrier?.permissions.includes("demo.finance.read") ?? false} />
           {view === "Fleet" &&
           <div className="grid gap-6 lg:grid-cols-[minmax(0,1.5fr)_minmax(20rem,1fr)]">

@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from pydantic import SecretStr
 
 from app.modules.ai import provider
+from app.modules.ai.database_answer import answer_from_database, matches_reference
 from app.modules.ai.routes import _MUTATION_PATTERN, ChatRequest, _question
 
 
@@ -87,3 +88,56 @@ def test_exhausted_provider_credit_is_reported_without_retry(monkeypatch) -> Non
     with pytest.raises(provider.ProviderQuotaExceeded):
         asyncio.run(provider.OpenAIProvider().answer("Fleet?", [], {"facts": []}))
     assert len(requests) == 1
+
+
+def test_database_answer_labels_stale_gps_and_uses_recorded_source() -> None:
+    bundle = {"facts": [{"tool": "getVehicleLocation", "truncated": False,
+                         "vehicles": [{"unit_number": "DEMO-101", "gps_latitude": "40.1",
+                                       "gps_longitude": "-75.2", "gps_source": "demo",
+                                       "gps_observed_at": "2020-01-01T00:00:00Z"}]}]}
+    answer = answer_from_database("Where was DEMO-101 last seen?", bundle,
+                                  "AI provider credit is exhausted.")
+    assert "verified database records" in answer
+    assert "DEMO-101: stale position 40.1, -75.2" in answer
+    assert "live" not in answer
+
+
+def test_database_answer_matches_saved_trip_and_does_not_invent_other_trips() -> None:
+    bundle = {"facts": [{"tool": "getAvailableVehicles", "truncated": False,
+                         "assets": [], "assignment_windows": [{
+                             "trip_reference": "Trip Demo 1", "truck_unit": "DEMO-101",
+                             "trailer_unit": None, "starts_at": "2026-11-24T01:00:00Z",
+                             "ends_at": "2026-11-24T02:00:00Z"}]}]}
+    answer = answer_from_database("Tell me about Trip Demo 1", bundle, "AI unavailable.")
+    assert "Trip Demo 1: truck DEMO-101" in answer
+    missing = answer_from_database("Tell me about Trip Unknown", bundle, "AI unavailable.")
+    assert "No matching trip assignment" in missing
+    assert "DEMO-101" not in missing
+
+
+def test_database_answer_finance_discloses_incomplete_basis() -> None:
+    bundle = {"facts": [{"tool": "getTripFinancialSummary", "currency": "USD",
+                         "recorded_costs_by_category": [{"category": "FUEL", "entry_count": 2,
+                                                         "amount_usd": "150.25"}]}]}
+    answer = answer_from_database("What were our costs?", bundle, "AI unavailable.")
+    assert "USD 150.25" in answer
+    assert "Cost completeness is unknown" in answer
+    assert "profit are unavailable" in answer
+
+
+def test_unit_number_match_is_exact_and_generic_vehicle_answer_is_specific() -> None:
+    assert matches_reference("Tell me about UnitNumber-1", "UnitNumber-1")
+    assert not matches_reference("Tell me about UnitNumber-10", "UnitNumber-1")
+    assert not matches_reference("Tell me about UnitNumber-1", "1")
+    bundle = {"facts": [
+        {"tool": "getFleetSummary", "carrier": {"name": "Test Carrier"},
+         "equipment_counts": []},
+        {"tool": "getAvailableVehicles", "truncated": False,
+         "assets": [{"id": "a1", "unit_number": "UnitNumber-1",
+                     "asset_type": "TRACTOR", "status": "AVAILABLE"}],
+         "assignment_windows": []},
+    ]}
+    answer = answer_from_database("Tell me something about UnitNumber-1", bundle,
+                                  "AI provider credit is exhausted.")
+    assert "UnitNumber-1: TRACTOR, status AVAILABLE" in answer
+    assert "equipment counts" not in answer

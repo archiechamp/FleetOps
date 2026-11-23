@@ -15,7 +15,6 @@ class Settings(BaseSettings):
     sql_trust_server_certificate: bool = False
     clerk_issuer: str | None = None
     clerk_authorized_party: str | None = None
-    demo_password: str | None = None
     demo_session_secret: str | None = None
     demo_runtime_password: str | None = None
     ai_provider: Literal["openai"] = "openai"

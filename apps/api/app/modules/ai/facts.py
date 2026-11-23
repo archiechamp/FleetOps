@@ -11,6 +11,7 @@ from sqlalchemy import text
 from app.core.db import tenant_connection
 from app.core.demo_auth import DemoMember
 from app.core.demo_db import get_demo_engine
+from app.modules.ai.database_answer import matches_reference
 
 
 def _value(value: Any) -> Any:
@@ -49,6 +50,7 @@ def gather_facts(member: DemoMember, question: str) -> dict[str, Any]:
     tenant = str(member.tenant_id)
     facts: list[dict[str, Any]] = []
     sources: list[dict[str, str | None]] = []
+    cost_rows: list[dict[str, Any]] = []
     with tenant_connection(get_demo_engine(), member.tenant_id) as connection:
         grants = connection.execute(text("""
             EXEC iam.get_verified_memberships @auth_provider='demo',
@@ -76,36 +78,52 @@ def gather_facts(member: DemoMember, question: str) -> dict[str, Any]:
         sources.append(_source("carrier", carrier[0]["id"], carrier[0]["name"],
                                "Overview", carrier[0]["updated_at"]))
 
+        # Resolve named records from bounded, tenant-scoped SQL reads. A prompt such as
+        # "tell me about DEMO-101" has no fleet keyword, but still names an asset.
+        asset_rows = _rows(connection, """
+            SELECT TOP (40) a.id, a.unit_number, t.code AS asset_type,
+                   a.make, a.model, a.model_year, a.ownership_type,
+                   term.name AS terminal, s.odometer_miles,
+                   a.status, a.updated_at
+            FROM fleet.assets a JOIN ref.asset_types t ON t.id=a.asset_type_id
+            LEFT JOIN core.terminals term ON term.tenant_id=a.tenant_id
+                AND term.id=a.terminal_id
+            LEFT JOIN demo.asset_state s ON s.tenant_id=a.tenant_id
+                AND s.asset_id=a.id
+            WHERE a.tenant_id=:tenant AND t.code IN ('TRACTOR','TRAILER')
+            ORDER BY a.unit_number
+        """, tenant)
+        assignment_rows = _rows(connection, """
+            SELECT TOP (40) x.id, x.trip_reference, x.starts_at, x.ends_at,
+                   truck.unit_number AS truck_unit, trailer.unit_number AS trailer_unit,
+                   x.created_at
+            FROM demo.assignments x
+            JOIN fleet.assets truck ON truck.tenant_id=x.tenant_id
+                AND truck.id=x.truck_asset_id
+            LEFT JOIN fleet.assets trailer ON trailer.tenant_id=x.tenant_id
+                AND trailer.id=x.trailer_asset_id
+            WHERE x.tenant_id=:tenant
+            ORDER BY x.starts_at DESC
+        """, tenant)
+        named_trips = [row for row in assignment_rows
+                       if matches_reference(question, row["trip_reference"])]
+        named_assets = ([] if named_trips else [row for row in asset_rows
+                        if matches_reference(question, row["unit_number"])])
+        wants_dispatch = wants_dispatch or bool(named_assets or named_trips)
+        wants_gps = wants_gps or any(row["asset_type"] == "TRACTOR" for row in named_assets)
+        wants_maintenance = wants_maintenance or bool(named_assets)
+
         if wants_dispatch:
             if "fleet.vehicle.read" not in permissions:
                 raise HTTPException(403, "Dispatch access denied")
-            rows = _rows(connection, """
-                SELECT TOP (40) a.id, a.unit_number, t.code AS asset_type,
-                       a.status, a.updated_at
-                FROM fleet.assets a JOIN ref.asset_types t ON t.id=a.asset_type_id
-                WHERE a.tenant_id=:tenant AND t.code IN ('TRACTOR','TRAILER')
-                ORDER BY a.unit_number
-            """, tenant)
-            assignments = _rows(connection, """
-                SELECT TOP (40) x.id, x.trip_reference, x.starts_at, x.ends_at,
-                       truck.unit_number AS truck_unit, trailer.unit_number AS trailer_unit,
-                       x.created_at
-                FROM demo.assignments x
-                JOIN fleet.assets truck ON truck.tenant_id=x.tenant_id
-                    AND truck.id=x.truck_asset_id
-                LEFT JOIN fleet.assets trailer ON trailer.tenant_id=x.tenant_id
-                    AND trailer.id=x.trailer_asset_id
-                WHERE x.tenant_id=:tenant
-                ORDER BY x.starts_at DESC
-            """, tenant)
             facts.append({"tool": "getAvailableVehicles", "scope": "current asset status",
-                          "assets": rows, "assignment_windows": assignments,
+                          "assets": asset_rows, "assignment_windows": assignment_rows,
                           "note": "Future availability requires a requested interval and dispatch recheck; this demo has no driver or HOS validation.",
-                          "truncated": len(rows) == 40 or len(assignments) == 40})
+                          "truncated": len(asset_rows) == 40 or len(assignment_rows) == 40})
             sources.extend(_source("asset", row["id"], row["unit_number"],
-                                   "Fleet", row["updated_at"]) for row in rows)
+                                   "Fleet", row["updated_at"]) for row in asset_rows)
             sources.extend(_source("assignment", row["id"], row["trip_reference"],
-                                   "Dispatch", row["created_at"]) for row in assignments)
+                                   "Dispatch", row["created_at"]) for row in assignment_rows)
 
         if wants_maintenance:
             if "fleet.vehicle.read" not in permissions:
@@ -158,6 +176,7 @@ def gather_facts(member: DemoMember, question: str) -> dict[str, Any]:
                     WHERE c.tenant_id=:tenant
                     ORDER BY c.occurred_on DESC, c.id
                 """, tenant)
+                cost_rows = rows
                 summary = _rows(connection, """
                     SELECT c.category, COUNT(*) AS entry_count,
                            SUM(c.amount_usd) AS amount_usd
@@ -176,6 +195,17 @@ def gather_facts(member: DemoMember, question: str) -> dict[str, Any]:
                                        f'{row["category"]} · {row["unit_number"]}',
                                        "Costs", row["created_at"]) for row in rows)
     # Remove repeated source chips while keeping stable order and keeping the model context bounded.
-    unique = list({(item["kind"], item["id"]): item for item in sources}.values())
+    if named_assets or named_trips:
+        asset_ids = {str(row["id"]) for row in named_assets}
+        trip_ids = {str(row["id"]) for row in named_trips}
+        cost_ids = {str(row["id"]) for row in cost_rows
+                    if matches_reference(question, row["unit_number"])
+                    or matches_reference(question, row["trip_reference"])}
+        sources = [item for item in sources
+                   if (item["kind"] == "asset" and item["id"] in asset_ids)
+                   or (item["kind"] == "assignment" and item["id"] in trip_ids)
+                   or (item["kind"] == "cost" and item["id"] in cost_ids)]
+    unique = list({(item["kind"], item["id"], item["view"]): item
+                   for item in sources}.values())
     return {"queried_at": now, "facts": facts, "sources": unique[:80],
             "scope": {"tenant_id": tenant}}

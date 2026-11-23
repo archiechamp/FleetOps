@@ -17,6 +17,7 @@ from app.core.config import get_settings
 from app.core.db import tenant_connection
 from app.core.demo_auth import DemoMember, require_demo_request, selected_member
 from app.core.demo_db import get_demo_engine
+from app.modules.ai.database_answer import answer_from_database
 from app.modules.ai.facts import gather_facts
 from app.modules.ai.provider import ProviderQuotaExceeded, ProviderUnavailable, get_provider
 
@@ -215,8 +216,6 @@ def status(member: Annotated[DemoMember, Depends(selected_member)]) -> dict[str,
 async def chat(body: ChatRequest,
                member: Annotated[DemoMember, Depends(selected_member)],
                _: Annotated[None, Depends(require_demo_request)]) -> StreamingResponse:
-    if get_settings().openai_api_key is None:
-        raise HTTPException(503, "AI provider is not configured")
     question = _question(body)
     history = await run_in_threadpool(_prepare, member, body.id, question)
     if _MUTATION_PATTERN.search(question):
@@ -232,12 +231,15 @@ async def chat(body: ChatRequest,
         if finance_denied:
             answer = "I do not have permission to read this carrier's cost records."
         else:
-            try:
-                answer = await get_provider().answer(question, history, bundle)
-            except ProviderQuotaExceeded:
-                raise HTTPException(503, "AI provider credit is exhausted") from None
-            except ProviderUnavailable:
-                raise HTTPException(503, "AI provider is unavailable; try again later") from None
+            if get_settings().openai_api_key is None:
+                answer = answer_from_database(question, bundle, "AI provider is not configured.")
+            else:
+                try:
+                    answer = await get_provider().answer(question, history, bundle)
+                except ProviderQuotaExceeded:
+                    answer = answer_from_database(question, bundle, "AI provider credit is exhausted.")
+                except ProviderUnavailable:
+                    answer = answer_from_database(question, bundle, "AI provider is unavailable.")
     requires_finance = any(fact.get("tool") == "getTripFinancialSummary"
                            and fact.get("access") != "denied"
                            for fact in bundle["facts"])

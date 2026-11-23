@@ -23,6 +23,7 @@ def get_demo_engine() -> Engine:
             "driver": "ODBC Driver 18 for SQL Server",
             "Encrypt": "yes",
             "TrustServerCertificate": "yes",
+            "LongAsMax": "yes",
         },
     ))
 

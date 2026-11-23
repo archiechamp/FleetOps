@@ -5,7 +5,7 @@ import { CopilotPanel } from "../CopilotPanel";
 
 afterEach(() => vi.unstubAllGlobals());
 
-it("shows provider setup state without pretending an answer is available", async () => {
+it("allows database questions when the AI provider is not configured", async () => {
   vi.stubGlobal("fetch", vi.fn(async (url: string) => ({
     ok: true,
     json: async () => url.endsWith("/status") ? {
@@ -15,7 +15,7 @@ it("shows provider setup state without pretending an answer is available", async
   })));
   render(<CopilotPanel carrierId="tenant-a" carrierName="Northstar Freight (Demo)"
     canFinance={false} onClose={vi.fn()} onNavigate={vi.fn()} />);
-  expect(await screen.findByText(/AI provider is not configured/i)).toBeVisible();
-  expect(screen.getByLabelText("Your question")).toBeDisabled();
+  expect(await screen.findByText(/Database answers available; AI provider not configured/i)).toBeVisible();
+  expect(screen.getByLabelText("Your question")).toBeEnabled();
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
 });
