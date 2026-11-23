@@ -1,0 +1,19 @@
+FROM node:24.15.0-alpine3.23@sha256:d1b3b4da11eefd5941e7f0b9cf17783fc99d9c6fc34884a665f40a06dbdfc94f AS build
+WORKDIR /workspace/apps/web
+COPY apps/web/package.json apps/web/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts apps/web/vitest.config.ts ./
+COPY apps/web/src ./src
+COPY apps/web/public ./public
+COPY packages/api-contracts /workspace/packages/api-contracts
+ENV VITE_FLEETOPS_MODE=production
+RUN npm run build
+
+FROM caddy:2.10.2-alpine@sha256:d8c17a862962def15cde69863a3a463f25a2664942eafd7bdbf050e9c3116b83
+COPY --from=build /workspace/apps/web/dist /srv
+COPY apps/web/Caddyfile.staging /etc/caddy/Caddyfile
+RUN adduser -D -u 10001 fleetops && chown -R fleetops:fleetops /srv /config /data
+USER fleetops
+ENV XDG_CONFIG_HOME=/config XDG_DATA_HOME=/data
+EXPOSE 8080
+CMD ["caddy", "run", "--config", "/etc/caddy/Caddyfile", "--adapter", "caddyfile"]

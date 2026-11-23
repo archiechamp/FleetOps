@@ -24,9 +24,11 @@ def create_app() -> FastAPI:
         app.include_router(demo_operations_router, prefix="/api/v1")
         app.include_router(ai_router, prefix="/api/v1")
     elif settings.env == "production":
+        from app.modules.ai.production_routes import router as production_ai_router
         from app.modules.fleet.production_routes import router as production_fleet_router
 
         app.include_router(production_fleet_router, prefix="/api/v1")
+        app.include_router(production_ai_router, prefix="/api/v1")
 
     @app.get("/health/live", tags=["health"])
     def live() -> dict[str, str]:
@@ -42,6 +44,16 @@ def create_app() -> FastAPI:
                 if revision == "0005_demo_ai_chat":
                     return {"status": "ready"}
             except SQLAlchemyError:
+                raise HTTPException(status_code=503, detail="Service is not ready") from None
+        elif settings.env == "production":
+            from app.core.production_db import get_production_engine
+
+            try:
+                with get_production_engine().connect() as connection:
+                    revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                if revision == "0005_production_readiness_grant":
+                    return {"status": "ready"}
+            except (SQLAlchemyError, RuntimeError):
                 raise HTTPException(status_code=503, detail="Service is not ready") from None
         raise HTTPException(status_code=503, detail="Service is not ready")
 

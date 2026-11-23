@@ -38,7 +38,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "-x", "target=demo@head", "upgrade", "demo@head"]
     environment: *setup_env
     depends_on:
       bootstrap:

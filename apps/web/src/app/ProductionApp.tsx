@@ -2,6 +2,7 @@ import { ClerkProvider, SignInButton, UserButton, useAuth } from "@clerk/react";
 import { useEffect, useState } from "react";
 
 import type { components } from "../../../../packages/api-contracts/vehicle-openapi";
+import { ProductionAiPanel } from "./ProductionAiPanel";
 
 type Vehicle = components["schemas"]["Vehicle"];
 type Carrier = { id: string; permissions: string[] };
@@ -13,12 +14,14 @@ function FleetWorkspace() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
       setCarriers([]);
       setCarrierId("");
       setVehicles([]);
+      setAiOpen(false);
       return;
     }
     const controller = new AbortController();
@@ -41,6 +44,7 @@ function FleetWorkspace() {
 
   useEffect(() => {
     setVehicles([]);
+    setAiOpen(false);
     if (!carrierId || !isSignedIn) return;
     const controller = new AbortController();
     setLoading(true);
@@ -61,7 +65,10 @@ function FleetWorkspace() {
     <header className="flex items-center justify-between border-b pb-5">
       <div><p className="text-xs font-bold uppercase tracking-widest text-blue-700">FleetOps</p>
         <h1 className="text-3xl font-bold">Fleet inventory</h1></div>
-      {isSignedIn && <UserButton />}
+      {isSignedIn && <div className="flex items-center gap-3">
+        {carrierId && <button type="button" className="rounded bg-blue-700 px-4 py-2 text-white" onClick={() => setAiOpen(true)}>Ask Fleet</button>}
+        <UserButton />
+      </div>}
     </header>
     {!isLoaded && <p role="status" className="mt-8">Checking sign-in…</p>}
     {isLoaded && !isSignedIn && <section className="mt-8 rounded-lg border p-6">
@@ -87,11 +94,13 @@ function FleetWorkspace() {
             </li>)}</ul>}
       </section>}
     </>}
+    {aiOpen && carrierId && <ProductionAiPanel key={carrierId} carrierId={carrierId} onClose={() => setAiOpen(false)} />}
   </main>;
 }
 
 export function ProductionApp() {
-  const publishableKey = import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+  const publishableKey = window.__FLEETOPS_CONFIG__?.publishableKey?.startsWith("pk_")
+    ? window.__FLEETOPS_CONFIG__.publishableKey : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) return <main role="alert">FleetOps sign-in is not configured.</main>;
   return <ClerkProvider publishableKey={publishableKey}><FleetWorkspace /></ClerkProvider>;
 }

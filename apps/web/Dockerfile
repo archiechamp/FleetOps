@@ -5,6 +5,7 @@ COPY apps/web/package.json apps/web/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY apps/web/index.html apps/web/tsconfig.json apps/web/vite.config.ts apps/web/vitest.config.ts ./
 COPY apps/web/src ./src
+COPY apps/web/public ./public
 COPY packages/api-contracts /workspace/packages/api-contracts
 RUN npm run build
 RUN mkdir -p node_modules/.vite-temp && chown node:node node_modules/.vite-temp

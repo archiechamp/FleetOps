@@ -41,6 +41,8 @@ Clerk-specific flows below describe the preferred spike configuration. Acceptanc
 
 **2026-11-24 deployment review (ADR-005 open):** Railway is the first application-host candidate for a live pilot following the user's hosting direction. This does not authorize exposing the loopback-only demo. Production identity, business routes, SQL Server migration/TLS, durable workers, private files, CI/GHCR promotion and staging smoke evidence are absent or incomplete. The host, Azure SQL connectivity design, region, cost and production release approval remain gated. See [Railway deployment readiness](railway-deployment-readiness.md) for observed blockers and the implementation sequence. Azure Container Apps remains an alternative if private database connectivity cannot be met on Railway.
 
+**2026-11-24 staging slice update (ADR-005/006 still open):** A separate Caddy staging web image, production Alembic branch, read-only fleet-inventory AI route, SQL-backed chat history/usage cap, and controlled pilot-reader onboarding now exist and have local synthetic SQL/browser evidence. No managed SQL, real Clerk session, funded model request, GitHub release, Railway service, or HTTPS smoke has been verified. The AI status does not claim seven-day retention because no purge worker exists. The pilot slice does not implement dispatch, GPS, maintenance, finance, or documents in the production data model. See [staging runbook](railway-staging-runbook.md) for exact prerequisites and sequence.
+
 **Change control:** write a dated ADR entry or update this register when proof-of-concept evidence changes a decision. Do not replace SQL Server with PostgreSQL, Python with Node, or Clerk with Supabase without approval.
 
 ## 3. Logical system diagram

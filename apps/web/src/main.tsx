@@ -12,6 +12,7 @@ if (container === null) {
 
 createRoot(container).render(
   <StrictMode>
-    {import.meta.env.VITE_FLEETOPS_MODE === "production" ? <ProductionApp /> : <App />}
+    {(window.__FLEETOPS_CONFIG__?.mode === "production" ||
+      import.meta.env.VITE_FLEETOPS_MODE === "production") ? <ProductionApp /> : <App />}
   </StrictMode>,
 );
