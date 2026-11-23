@@ -23,6 +23,10 @@ def create_app() -> FastAPI:
         app.include_router(fleet_router, prefix="/api/v1")
         app.include_router(demo_operations_router, prefix="/api/v1")
         app.include_router(ai_router, prefix="/api/v1")
+    elif settings.env == "production":
+        from app.modules.fleet.production_routes import router as production_fleet_router
+
+        app.include_router(production_fleet_router, prefix="/api/v1")
 
     @app.get("/health/live", tags=["health"])
     def live() -> dict[str, str]:

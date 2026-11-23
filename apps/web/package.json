@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@ai-sdk/react": "4.0.184",
+    "@clerk/react": "6.19.4",
     "ai": "7.0.179",
     "react": "19.3.1",
     "react-dom": "19.3.1"
