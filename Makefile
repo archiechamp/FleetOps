@@ -6,6 +6,7 @@ PYTHON ?= python3
 test: test-unit test-integration test-selenium
 
 test-unit:
+	$(PYTHON) -m unittest tools.test_verify_release_checks
 	$(COMPOSE) build bootstrap
 	$(COMPOSE) run --rm --no-deps -e FLEETOPS_ENV=test -e FLEETOPS_DATABASE_NAME=fleetops_test_001 bootstrap python -m pytest tests/unit -q -p no:cacheprovider
 	cd apps/web && npm ci --no-audit --no-fund && npm run lint && npm run typecheck && npm test -- --run && npm run build

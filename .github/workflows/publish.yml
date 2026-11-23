@@ -1,0 +1,65 @@
+name: Publish FleetOps images
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    environment: staging-release
+    permissions:
+      contents: read
+      checks: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Verify exact main commit checks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 tools/verify_release_checks.py
+      - name: Build API image
+        run: docker build -f apps/api/Dockerfile -t fleetops-api:release .
+      - name: Build web image
+        run: docker build -f apps/web/Dockerfile.staging -t fleetops-web:release .
+      - name: Scan API image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-api:release
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+      - name: Scan web image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-web:release
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+      - name: Authenticate to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+      - name: Publish scanned images and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          api="ghcr.io/${owner}/fleetops-api:${GITHUB_SHA}"
+          web="ghcr.io/${owner}/fleetops-web:${GITHUB_SHA}"
+          docker tag fleetops-api:release "$api"
+          docker tag fleetops-web:release "$web"
+          api_digest="$(docker push "$api" | awk '/digest: sha256:/ {print $3}' | tail -1)"
+          web_digest="$(docker push "$web" | awk '/digest: sha256:/ {print $3}' | tail -1)"
+          test -n "$api_digest" && test -n "$web_digest"
+          printf '{"commit":"%s","sql_revision":"0005_production_readiness_grant","api":"ghcr.io/%s/fleetops-api@%s","web":"ghcr.io/%s/fleetops-web@%s"}\n' \
+            "$GITHUB_SHA" "$owner" "$api_digest" "$owner" "$web_digest" > release-manifest.json
+          cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve immutable release manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: fleetops-release-manifest-${{ github.sha }}
+          path: release-manifest.json
+          retention-days: 30
