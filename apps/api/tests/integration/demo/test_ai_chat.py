@@ -23,6 +23,11 @@ class FakeProvider:
         return "The saved demo carrier has fleet records."
 
 
+def _enable_fake_model(monkeypatch) -> None:
+    monkeypatch.setattr(routes, "get_settings", lambda: type("Settings", (), {
+        "openai_api_key": SecretStr("test-only-key")})())
+
+
 def _login(client: TestClient, username: str) -> str:
     response = client.post("/api/v1/demo/login", json={
         "username": username},
@@ -44,6 +49,7 @@ def _events(response) -> list[dict]:
 def test_grounded_stream_history_feedback_and_member_isolation(monkeypatch) -> None:
     fake = FakeProvider()
     monkeypatch.setattr(routes, "get_provider", lambda: fake)
+    _enable_fake_model(monkeypatch)
     conversation_id = str(uuid4())
     app = create_app()
     with TestClient(app) as creator:
@@ -81,6 +87,7 @@ def test_grounded_stream_history_feedback_and_member_isolation(monkeypatch) -> N
 def test_reader_cost_question_and_forbidden_mutation_use_no_model(monkeypatch) -> None:
     fake = FakeProvider()
     monkeypatch.setattr(routes, "get_provider", lambda: fake)
+    _enable_fake_model(monkeypatch)
     app = create_app()
     with TestClient(app) as reader:
         tenant = _login(reader, "demo_reader")
