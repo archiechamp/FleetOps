@@ -1,0 +1,18 @@
+---
+description: FleetOps repository rules for React, FastAPI, SQL Server, tenant security, dispatch and AI Copilot
+alwaysApply: true
+---
+
+# FleetOps Project Rule
+
+Read @AGENTS.md, @spec.md and @docs/architecture-notes.md before making architectural or substantial code changes. AGENTS.md is canonical; this Cursor rule is only a short entry point.
+
+- Stack: React + TypeScript + Vite + Tailwind; Python FastAPI; Microsoft SQL Server; Clerk preferred; Vercel AI SDK UI with Python Claude/OpenAI server; Docker + Docker Compose + GitHub Actions + GHCR; VS Code. Read `docs/development-and-delivery.md` for container and release requirements.
+- Follow approved requirement IDs, API contracts, and decision status. Inspect existing repo before edits; this kit initially contains only documents.
+- Enforce membership, tenant scoping, role permissions and sensitive record controls in FastAPI, never only the UI or prompt.
+- Dispatch changes must be transactional and conflict-safe; use audited state transitions and durable idempotency.
+- Financial calculations need Decimal precision and clear cost/mileage completeness. GPS data must show freshness.
+- AI Copilot is read-only, has only authorized allowlisted backend tools, and must give grounded sources or state unknown. Never allow model-generated SQL or write tools.
+- No committed secrets, unverified compliance claims, fabricated tests or deployment success.
+- Implement and test the smallest working vertical slice; document changes and actual checks run.
+- Generate unit, integration and Selenium tests alongside the feature using @spec-kit/feature-test-generation.md (DEV-008).

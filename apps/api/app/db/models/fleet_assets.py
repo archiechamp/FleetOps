@@ -1,0 +1,30 @@
+"""Approved Feature 001 SQL Server table contract."""
+from app.db.models.definition import create_table
+
+SPEC = {'table': 'fleet.assets',
+ 'pk': 'id',
+ 'columns': [{'name': 'id', 'type': 'UNIQUEIDENTIFIER', 'nullable': False, 'default': 'NEWSEQUENTIALID()', 'identity': False},
+             {'name': 'tenant_id', 'type': 'UNIQUEIDENTIFIER', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'unit_number', 'type': 'NVARCHAR(30)', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'asset_type_id', 'type': 'SMALLINT', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'vin', 'type': 'VARCHAR(17)', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'make', 'type': 'NVARCHAR(80)', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'model', 'type': 'NVARCHAR(80)', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'model_year', 'type': 'SMALLINT', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'ownership_type', 'type': 'VARCHAR(20)', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'status', 'type': 'VARCHAR(25)', 'nullable': False, 'default': "'AVAILABLE'", 'identity': False},
+             {'name': 'terminal_id', 'type': 'UNIQUEIDENTIFIER', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'in_service_date', 'type': 'DATE', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'acquisition_cost', 'type': 'DECIMAL(19,4)', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'currency_code', 'type': 'CHAR(3)', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'notes', 'type': 'NVARCHAR(2000)', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'created_at', 'type': 'DATETIME2(3)', 'nullable': False, 'default': 'SYSUTCDATETIME()', 'identity': False},
+             {'name': 'updated_at', 'type': 'DATETIME2(3)', 'nullable': False, 'default': 'SYSUTCDATETIME()', 'identity': False},
+             {'name': 'row_version', 'type': 'ROWVERSION', 'nullable': False, 'default': None, 'identity': False},
+             {'name': 'created_by', 'type': 'UNIQUEIDENTIFIER', 'nullable': True, 'default': None, 'identity': False},
+             {'name': 'updated_by', 'type': 'UNIQUEIDENTIFIER', 'nullable': True, 'default': None, 'identity': False}],
+ 'foreign_keys': [{'columns': ['tenant_id'], 'target': 'core.tenants', 'target_columns': ['id'], 'nullable': False}, {'columns': ['asset_type_id'], 'target': 'ref.asset_types', 'target_columns': ['id'], 'nullable': False}, {'columns': ['tenant_id', 'terminal_id'], 'target': 'core.terminals', 'target_columns': ['tenant_id', 'id'], 'nullable': True}, {'columns': ['currency_code'], 'target': 'ref.currencies', 'target_columns': ['code'], 'nullable': False}, {'columns': ['tenant_id', 'created_by'], 'target': 'iam.memberships', 'target_columns': ['tenant_id', 'id'], 'nullable': True}, {'columns': ['tenant_id', 'updated_by'], 'target': 'iam.memberships', 'target_columns': ['tenant_id', 'id'], 'nullable': True}],
+ 'unique_keys': [['tenant_id', 'id'], ['tenant_id', 'unit_number']],
+ 'checks': ["status IN ('AVAILABLE','ASSIGNED','IN_TRANSIT','MAINTENANCE','OUT_OF_SERVICE','INACTIVE')", "ownership_type IN ('OWNED','LEASED','CONTRACTED')", 'model_year BETWEEN 1900 AND 2100', 'vin IS NULL OR LEN(vin)=17'],
+ 'indexes': [{'columns': ['tenant_id', 'vin'], 'unique': True, 'filter': 'vin IS NOT NULL'}, {'columns': ['tenant_id', 'asset_type_id'], 'unique': False, 'filter': None}, {'columns': ['tenant_id', 'terminal_id'], 'unique': False, 'filter': None}, {'columns': ['tenant_id', 'currency_code'], 'unique': False, 'filter': None}, {'columns': ['tenant_id', 'status', 'terminal_id'], 'unique': False, 'filter': None}]}
+table = create_table(SPEC)

@@ -1,0 +1,28 @@
+# FleetOps — Cursor rules (legacy compatibility)
+# Canonical instructions: AGENTS.md
+# Product requirements: spec.md
+# Technical architecture: docs/architecture-notes.md
+
+You are working on FleetOps: a trucking fleet-management and trip-economics product with a read-only AI Copilot.
+
+Before coding, READ AGENTS.md, spec.md, and docs/architecture-notes.md. If anything conflicts, flag it and propose an ADR. Inspect the actual repo and do not assume app code exists.
+
+STACK: React.js + TypeScript + Vite + Tailwind CSS; Python FastAPI; Microsoft SQL Server with SQLAlchemy/Alembic; Clerk preferred for identity; Vercel AI SDK React chat + Python model/provider orchestration; OpenAI or Claude; Docker, Docker Compose, GitHub Actions, GHCR, VS Code. Do not replace technologies without explicit approval. Linux container Python/SQL driver and AI streaming require a proof-of-concept before declaring production readiness.
+
+NON-NEGOTIABLE:
+- Verify session token, tenant membership, permissions and resource scope server-side.
+- Keep fleet, dispatch, documents, driver personal data, GPS history and finance tenant-isolated.
+- Apply safe dispatch-state transitions and DB-level conflict checks for assignments.
+- Use fixed-precision money; label missing/estimated vs reconciled cost data.
+- Display GPS last-seen timestamps; stale != live.
+- Use idempotency for imports, provider/webhook events and mobile resync.
+- AI Copilot is READ ONLY: no arbitrary SQL, write tools, shell access or autonomous dispatch/financial mutations. Ground answers in authorized source records; disclose missing/stale data and respect privacy.
+- No secrets in source files or logs. Do not assert ELD certification or guarantee regulatory compliance.
+
+DELIVERY: Follow docs/development-and-delivery.md; no production deployment without approval; test container builds, migration and rollback; never commit secrets.
+
+WORKFLOW: find spec requirement ID -> inspect code -> plan narrow vertical slice -> implement typed API/UI/DB/migration -> test normal/negative/auth/tenant/concurrency cases -> document real test results and outstanding decisions. Never claim deployments or tests that did not run.
+
+TEST GENERATION: Apply spec-kit/feature-test-generation.md (DEV-008) when generating application code. Include unit, integration and Selenium coverage in the implementing change.
+
+Modern Cursor project rule: .cursor/rules/fleetops.mdc. AGENTS.md remains canonical; do not duplicate full rule sets.

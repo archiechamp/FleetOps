@@ -1,0 +1,647 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "FleetOps Feature 001 — Vehicle Registration",
+    "version": "0.2.0-review",
+    "description": "Planning-only contract for AUTH-01/02, FLT-01 and DEV-008. The user-authorized integration.idempotency_keys addition and post-trim UTF-16 code-unit rules resolve B-001/B-002. No API implementation or runtime validation is claimed."
+  },
+  "servers": [
+    {
+      "url": "/api/v1"
+    }
+  ],
+  "security": [
+    {
+      "SessionBearer": []
+    }
+  ],
+  "x-review-status": "REVISED FOR REVIEW: B-001/B-002 resolved by user direction; implementation and runtime evidence pending",
+  "paths": {
+    "/me": {
+      "get": {
+        "operationId": "getMyMemberships",
+        "summary": "List the verified user's active carrier memberships and effective capabilities",
+        "description": "Verified provider credentials and current session state are required. Results are obtained by a bounded identity bootstrap interface and contain only this user's active memberships. No client subject/role/organization claim grants membership. This operation does not require a selected carrier.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "User-scoped active memberships",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MembershipPage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/vehicles": {
+      "get": {
+        "operationId": "listVehicles",
+        "summary": "Read vehicles in the verified selected carrier",
+        "description": "Requires fleet.vehicle.read. Exact unit-number filtering trims outer whitespace and applies the same case-insensitive collation as uniqueness. No foreign-carrier counts or rows. Default limit 50, maximum 100; cursor bound to user, carrier, filters and sort order.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TenantSelection"
+          },
+          {
+            "$ref": "#/components/parameters/Cursor"
+          },
+          {
+            "$ref": "#/components/parameters/Limit"
+          },
+          {
+            "name": "unit_number",
+            "in": "query",
+            "required": false,
+            "description": "Optional exact normalized unit number; same post-trim UTF-16 validation as registration.",
+            "schema": {
+              "type": "string",
+              "description": "Exact normalized unit-number search value. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–30 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+              "x-utf16-min-code-units": 1,
+              "x-utf16-max-code-units": 30,
+              "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+              "x-unicode-well-formed": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized vehicle page",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclePage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      },
+      "post": {
+        "operationId": "registerVehicle",
+        "summary": "Register a truck for the verified selected carrier",
+        "description": "Requires current fleet.vehicle.read and fleet.vehicle.create. Scope Idempotency-Key by verified tenant, operation version and submitting membership. A transaction-owned SQL lock serializes that scope; asset, vehicle, audit and integration.idempotency_keys receipt commit together. Authorized identical canonical payload/key retries return the original 201 body and Location after restart with no new effect. A different valid canonical payload conflicts with 409; invalid input is 422. Another member/tenant's raw key never retrieves the original result. Reauthorize after waiting and before replay. Replay uses hash-verified original input and immutable referenced vehicle identity/creation time, not mutable current values. No automatic receipt expiry/purge. Unknown body fields including tenant_id/role/asset_id/status are rejected after authorization.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TenantSelection"
+          },
+          {
+            "$ref": "#/components/parameters/IdempotencyKey"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Committed registration or currently authorized replay with identical original JSON values and Location; no new audit on replay.",
+            "headers": {
+              "Location": {
+                "description": "Relative authorized vehicle detail API path",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vehicle"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "409": {
+            "$ref": "#/components/responses/Conflict"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    },
+    "/vehicles/{vehicle_id}": {
+      "get": {
+        "operationId": "getVehicle",
+        "summary": "Read one authorized truck",
+        "description": "Requires fleet.vehicle.read. Resolve vehicle ID within verified tenant and join asset by tenant_id plus asset_id. An unknown vehicle and another carrier's vehicle use identical non-disclosing 404 payloads apart from request_id.",
+        "parameters": [
+          {
+            "$ref": "#/components/parameters/TenantSelection"
+          },
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized truck identifying details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Vehicle"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationFailed"
+          },
+          "500": {
+            "$ref": "#/components/responses/InternalError"
+          },
+          "503": {
+            "$ref": "#/components/responses/Unavailable"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "SessionBearer": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT",
+        "description": "Official provider verification plus current session status, then internal membership/capability checks. Production rejects synthetic test issuers."
+      }
+    },
+    "parameters": {
+      "TenantSelection": {
+        "name": "X-Tenant-Id",
+        "in": "header",
+        "required": true,
+        "description": "User's carrier selection only; server must verify active membership before binding SQL scope. Missing/unverified selection is forbidden. Never ownership authority by itself.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "IdempotencyKey": {
+        "name": "Idempotency-Key",
+        "in": "header",
+        "required": true,
+        "description": "UUID submission key, canonicalized to lowercase hyphenated form and scoped to verified tenant, vehicle.register:v1 and submitting membership. Retain unchanged across uncertain-response retries; no automatic expiration in Feature 001. Valid changed payload under the same scope/key returns 409.",
+        "schema": {
+          "type": "string",
+          "format": "uuid"
+        }
+      },
+      "Cursor": {
+        "name": "cursor",
+        "in": "query",
+        "required": false,
+        "description": "Opaque authenticated cursor bound to verified identity/context and filters; invalid or changed-context cursor rejected with 422.",
+        "schema": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      },
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "required": false,
+        "schema": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        }
+      }
+    },
+    "schemas": {
+      "VehicleCreate": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "unit_number",
+          "make",
+          "model",
+          "model_year",
+          "ownership_type"
+        ],
+        "properties": {
+          "unit_number": {
+            "type": "string",
+            "description": "Preserve display case; uniqueness/search use the approved case-insensitive collation. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–30 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 30,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "make": {
+            "type": "string",
+            "description": "Preserve display case; no fabricated defaults. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–80 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 80,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "model": {
+            "type": "string",
+            "description": "Preserve display case; no fabricated defaults. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–80 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 80,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "model_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100,
+            "description": "Strict integer; booleans, fractions and strings are not accepted."
+          },
+          "ownership_type": {
+            "type": "string",
+            "enum": [
+              "OWNED",
+              "LEASED",
+              "CONTRACTED"
+            ]
+          }
+        }
+      },
+      "Vehicle": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tenant_id",
+          "unit_number",
+          "make",
+          "model",
+          "model_year",
+          "ownership_type",
+          "created_at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "fleet.vehicles.id, distinct from fleet.assets.id"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Verified owning carrier"
+          },
+          "unit_number": {
+            "type": "string",
+            "description": "Preserve display case; uniqueness/search use the approved case-insensitive collation. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–30 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 30,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "make": {
+            "type": "string",
+            "description": "Preserve display case; no fabricated defaults. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–80 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 80,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "model": {
+            "type": "string",
+            "description": "Preserve display case; no fabricated defaults. Validate well-formed Unicode, trim the fixed ECMAScript whitespace set, then require 1–80 UTF-16 code units. Supplementary characters count as two. No truncation or Unicode normalization. The custom annotations require explicit client/server validators; generic maxLength is intentionally omitted.",
+            "x-utf16-min-code-units": 1,
+            "x-utf16-max-code-units": 80,
+            "x-trim-set": "fleetops-ecmascript-whitespace-v1",
+            "x-unicode-well-formed": true
+          },
+          "model_year": {
+            "type": "integer",
+            "minimum": 1900,
+            "maximum": 2100
+          },
+          "ownership_type": {
+            "type": "string",
+            "enum": [
+              "OWNED",
+              "LEASED",
+              "CONTRACTED"
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{3}Z$",
+            "description": "Original immutable fleet.vehicles.created_at in UTC, serialized with exactly three fractional digits and Z; identical on replay."
+          }
+        }
+      },
+      "VehiclePage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Vehicle"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          }
+        }
+      },
+      "Membership": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "membership_id",
+          "tenant_id",
+          "tenant_name",
+          "permissions"
+        ],
+        "properties": {
+          "membership_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "tenant_name": {
+            "type": "string",
+            "maxLength": 200
+          },
+          "permissions": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "enum": [
+                "fleet.vehicle.read",
+                "fleet.vehicle.create"
+              ]
+            },
+            "description": "Feature-relevant current permissions, not client-supplied roles"
+          }
+        }
+      },
+      "MembershipPage": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "memberships",
+          "next_cursor"
+        ],
+        "properties": {
+          "memberships": {
+            "type": "array",
+            "maxItems": 100,
+            "items": {
+              "$ref": "#/components/schemas/Membership"
+            }
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 2048
+          }
+        }
+      },
+      "ErrorEnvelope": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "error",
+          "request_id"
+        ],
+        "properties": {
+          "error": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "code",
+              "message",
+              "details"
+            ],
+            "properties": {
+              "code": {
+                "type": "string",
+                "enum": [
+                  "UNAUTHENTICATED",
+                  "FORBIDDEN",
+                  "RESOURCE_NOT_FOUND",
+                  "VALIDATION_ERROR",
+                  "VEHICLE_UNIT_CONFLICT",
+                  "IDEMPOTENCY_CONFLICT",
+                  "SERVICE_UNAVAILABLE",
+                  "INTERNAL_ERROR"
+                ]
+              },
+              "message": {
+                "type": "string",
+                "description": "Safe user-facing message without SQL/provider internals or foreign-carrier details."
+              },
+              "details": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "field",
+                        "message"
+                      ],
+                      "properties": {
+                        "field": {
+                          "type": "string"
+                        },
+                        "message": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        }
+      }
+    },
+    "responses": {
+      "Unauthenticated": {
+        "description": "Missing/invalid/expired/revoked provider identity (401).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Forbidden": {
+        "description": "Known forbidden capability, inactive membership or missing/unverified carrier context (403).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "ValidationFailed": {
+        "description": "Safe field/header/query validation failure; no business writes (422).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Unknown or non-disclosable vehicle; same response semantics (404).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Conflict": {
+        "description": "Duplicate normalized unit or conflicting idempotency payload; no extra truck (409).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "InternalError": {
+        "description": "Sanitized internal error; unfinished transaction rolls back (500).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      },
+      "Unavailable": {
+        "description": "Identity/session verification or service unavailable; fail closed with no claimed success (503).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ErrorEnvelope"
+            }
+          }
+        }
+      }
+    }
+  },
+  "x-trim-sets": {
+    "fleetops-ecmascript-whitespace-v1": [
+      "U+0009–U+000D",
+      "U+0020",
+      "U+00A0",
+      "U+1680",
+      "U+2000–U+200A",
+      "U+2028",
+      "U+2029",
+      "U+202F",
+      "U+205F",
+      "U+3000",
+      "U+FEFF"
+    ]
+  }
+}

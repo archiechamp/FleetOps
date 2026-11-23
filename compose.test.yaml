@@ -1,0 +1,77 @@
+name: fleetops001test
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest@sha256:4525e3efac9f3e241cb003bb2ff2a82818b502f37e12049d788b1a9fa7e13b7f
+    platform: linux/amd64
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_PID: Developer
+      MSSQL_SA_PASSWORD: ${FLEETOPS_TEST_SA_PASSWORD:?Set an isolated test SA password}
+      SQLCMDPASSWORD: ${FLEETOPS_TEST_SA_PASSWORD:?Set an isolated test SA password}
+    networks:
+      - test_private
+    volumes:
+      - test_sql_data:/var/opt/mssql
+      - ./tests/sql/ready.sql:/test/ready.sql:ro
+      - ./tests/sql/bootstrap.sql:/test/bootstrap.sql:ro
+      - ./tests/sql/foundation_verify.sql:/test/foundation_verify.sql:ro
+      - ./tests/sql/security_probe.sql:/test/security_probe.sql:ro
+    restart: "no"
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/1433'"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 40s
+
+  api-tests:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      FLEETOPS_ENV: test
+      FLEETOPS_SQL_SERVER: sqlserver
+      FLEETOPS_DATABASE_NAME: fleetops_test_001
+      FLEETOPS_TEST_SA_PASSWORD: ${FLEETOPS_TEST_SA_PASSWORD:?Set an isolated test SA password}
+    networks:
+      - test_private
+    profiles: ["test"]
+    command: ["python", "-m", "pytest", "tests/unit", "-q"]
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    environment:
+      FLEETOPS_ENV: test
+      FLEETOPS_SQL_SERVER: sqlserver
+      FLEETOPS_DATABASE_NAME: fleetops_test_001
+    networks:
+      - test_private
+    profiles: ["test"]
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "127.0.0.1:18080:8080"
+    networks:
+      - test_private
+    profiles: ["test"]
+
+networks:
+  test_private:
+    internal: true
+
+volumes:
+  test_sql_data:

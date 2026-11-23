@@ -1,0 +1,5 @@
+"""Approved Feature 001 SQL Server table contract."""
+from app.db.models.definition import create_table
+
+SPEC = {'table': 'iam.permissions', 'pk': 'id', 'columns': [{'name': 'id', 'type': 'UNIQUEIDENTIFIER', 'nullable': False, 'default': 'NEWSEQUENTIALID()', 'identity': False}, {'name': 'code', 'type': 'VARCHAR(100)', 'nullable': False, 'default': None, 'identity': False}, {'name': 'resource', 'type': 'VARCHAR(50)', 'nullable': False, 'default': None, 'identity': False}, {'name': 'action', 'type': 'VARCHAR(50)', 'nullable': False, 'default': None, 'identity': False}, {'name': 'created_at', 'type': 'DATETIME2(3)', 'nullable': False, 'default': 'SYSUTCDATETIME()', 'identity': False}, {'name': 'updated_at', 'type': 'DATETIME2(3)', 'nullable': False, 'default': 'SYSUTCDATETIME()', 'identity': False}, {'name': 'row_version', 'type': 'ROWVERSION', 'nullable': False, 'default': None, 'identity': False}], 'foreign_keys': [], 'unique_keys': [['code']], 'checks': [], 'indexes': []}
+table = create_table(SPEC)

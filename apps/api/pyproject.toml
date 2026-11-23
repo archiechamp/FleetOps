@@ -1,0 +1,31 @@
+[project]
+name = "fleetops-api"
+version = "0.1.0"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+  "alembic>=1.17,<2",
+  "fastapi>=0.115,<1",
+  "httpx>=0.28,<1",
+  "pydantic>=2.11,<3",
+  "pydantic-settings>=2.10,<3",
+  "pyodbc>=5.2,<6",
+  "sqlalchemy>=2.0.40,<3",
+  "uvicorn>=0.35,<1",
+]
+
+[project.optional-dependencies]
+test = [
+  "httpx>=0.28,<1",
+  "pytest>=9,<10",
+  "ruff>=0.14,<1",
+  "selenium>=4.35,<5",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["integration: requires isolated SQL Server and application services"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100

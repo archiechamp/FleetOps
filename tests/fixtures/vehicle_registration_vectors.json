@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "trim_code_points": ["0009", "000A", "000B", "000C", "000D", "0020", "00A0", "1680", "2000", "2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "200A", "2028", "2029", "202F", "205F", "3000", "FEFF"],
+  "value_format": "Concatenate parts in order; repeat each text repeat times. Unicode escape sequences are decoded by the JSON parser. expected_units applies after outer trim.",
+  "cases": [
+    {"id": "UC-01-blank", "fields": ["unit_number", "make", "model"], "parts": [{"text": " \t\u00a0", "repeat": 1}], "valid": false, "expected_units": 0},
+    {"id": "UC-01-one", "fields": ["unit_number", "make", "model"], "parts": [{"text": "A", "repeat": 1}], "valid": true, "expected_units": 1},
+    {"id": "UC-02-unit-30", "fields": ["unit_number"], "parts": [{"text": "A", "repeat": 30}], "valid": true, "expected_units": 30},
+    {"id": "UC-02-unit-31", "fields": ["unit_number"], "parts": [{"text": "A", "repeat": 31}], "valid": false, "expected_units": 31},
+    {"id": "UC-02-name-80", "fields": ["make", "model"], "parts": [{"text": "A", "repeat": 80}], "valid": true, "expected_units": 80},
+    {"id": "UC-02-name-81", "fields": ["make", "model"], "parts": [{"text": "A", "repeat": 81}], "valid": false, "expected_units": 81},
+    {"id": "UC-03-trucks-15", "fields": ["unit_number"], "parts": [{"text": "🚚", "repeat": 15}], "valid": true, "expected_units": 30},
+    {"id": "UC-03-trucks-14-a", "fields": ["unit_number"], "parts": [{"text": "🚚", "repeat": 14}, {"text": "A", "repeat": 1}], "valid": true, "expected_units": 29},
+    {"id": "UC-03-trucks-15-a", "fields": ["unit_number"], "parts": [{"text": "🚚", "repeat": 15}, {"text": "A", "repeat": 1}], "valid": false, "expected_units": 31},
+    {"id": "UC-03-trucks-16", "fields": ["unit_number"], "parts": [{"text": "🚚", "repeat": 16}], "valid": false, "expected_units": 32},
+    {"id": "UC-04-mixed-30", "fields": ["unit_number"], "parts": [{"text": "A", "repeat": 28}, {"text": "🚚", "repeat": 1}], "valid": true, "expected_units": 30},
+    {"id": "UC-04-mixed-31", "fields": ["unit_number"], "parts": [{"text": "A", "repeat": 29}, {"text": "🚚", "repeat": 1}], "valid": false, "expected_units": 31},
+    {"id": "UC-05-trucks-40", "fields": ["make", "model"], "parts": [{"text": "🚚", "repeat": 40}], "valid": true, "expected_units": 80},
+    {"id": "UC-05-trucks-39-a", "fields": ["make", "model"], "parts": [{"text": "🚚", "repeat": 39}, {"text": "A", "repeat": 1}], "valid": true, "expected_units": 79},
+    {"id": "UC-05-trucks-40-a", "fields": ["make", "model"], "parts": [{"text": "🚚", "repeat": 40}, {"text": "A", "repeat": 1}], "valid": false, "expected_units": 81},
+    {"id": "UC-05-trucks-41", "fields": ["make", "model"], "parts": [{"text": "🚚", "repeat": 41}], "valid": false, "expected_units": 82},
+    {"id": "UC-06-mixed-80", "fields": ["make", "model"], "parts": [{"text": "A", "repeat": 78}, {"text": "🚚", "repeat": 1}], "valid": true, "expected_units": 80},
+    {"id": "UC-06-mixed-81", "fields": ["make", "model"], "parts": [{"text": "A", "repeat": 79}, {"text": "🚚", "repeat": 1}], "valid": false, "expected_units": 81},
+    {"id": "UC-07-outer-trim", "fields": ["unit_number", "make", "model"], "parts": [{"text": "\ufeff\u3000\u00a0", "repeat": 1}, {"text": "A", "repeat": 1}, {"text": "\u2029\u0009", "repeat": 1}], "valid": true, "expected_units": 1, "expected_normalized": "A"},
+    {"id": "UC-07-interior", "fields": ["unit_number", "make", "model"], "parts": [{"text": "A\u00a0B", "repeat": 1}], "valid": true, "expected_units": 3, "expected_normalized": "A\u00a0B"},
+    {"id": "UC-07-nontrim-0085", "fields": ["unit_number", "make", "model"], "parts": [{"text": "\u0085A\u0085", "repeat": 1}], "valid": true, "expected_units": 3, "expected_normalized": "\u0085A\u0085"},
+    {"id": "UC-08-high-surrogate", "fields": ["unit_number", "make", "model"], "parts": [{"text": "\ud800", "repeat": 1}], "valid": false, "expected_units": null},
+    {"id": "UC-08-low-surrogate", "fields": ["unit_number", "make", "model"], "parts": [{"text": "\udc00", "repeat": 1}], "valid": false, "expected_units": null},
+    {"id": "UC-08-valid-pair", "fields": ["unit_number", "make", "model"], "parts": [{"text": "🚚", "repeat": 1}], "valid": true, "expected_units": 2},
+    {"id": "UC-09-unit-combining-30", "fields": ["unit_number"], "parts": [{"text": "e\u0301", "repeat": 15}], "valid": true, "expected_units": 30},
+    {"id": "UC-09-unit-combining-31", "fields": ["unit_number"], "parts": [{"text": "e\u0301", "repeat": 15}, {"text": "A", "repeat": 1}], "valid": false, "expected_units": 31},
+    {"id": "UC-09-name-combining-80", "fields": ["make", "model"], "parts": [{"text": "e\u0301", "repeat": 40}], "valid": true, "expected_units": 80},
+    {"id": "UC-09-name-combining-81", "fields": ["make", "model"], "parts": [{"text": "e\u0301", "repeat": 40}, {"text": "A", "repeat": 1}], "valid": false, "expected_units": 81}
+  ],
+  "hash_cases": [
+    {"id": "normalized-spacing", "payload": {"unit_number": " TRK-001 ", "make": " Acme ", "model": " Road ", "model_year": 2025, "ownership_type": "OWNED"}, "canonical_json": "[1,\"TRK-001\",\"Acme\",\"Road\",2025,\"OWNED\"]", "sha256_hex": "0590b1268a16f13bb0646d16c4f2bd29358cb9b774b5f3d9c7de9a5524d7ad7e"},
+    {"id": "supplementary-preserved", "payload": {"unit_number": "🚚", "make": "A", "model": "e\u0301", "model_year": 1900, "ownership_type": "LEASED"}, "canonical_json": "[1,\"🚚\",\"A\",\"e\u0301\",1900,\"LEASED\"]", "sha256_hex": "986cfd53a863d15e8ce9de54987135b141bf92563eb6f424b7be51e14ab32475"}
+  ]
+}

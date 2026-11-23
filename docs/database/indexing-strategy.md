@@ -1,0 +1,9 @@
+# SQL Server indexing strategy
+
+Exact proposed indexes and keys are recorded per table in `constraints-and-indexes.md` and `database/metadata/model.json`. All are preliminary physical choices, not measured tuning results. The generated DDL uses a clustered primary key by default and nonclustered unique/secondary indexes. UUIDs use NEWSEQUENTIALID server defaults for insert locality; application-generated random UUIDs need fragmentation monitoring. BIGINT IDENTITY is used for high-volume telemetry/audit. A unique (tenant_id,id) key supports composite FKs. These keys are not substitutes for permission filters.
+
+- Prioritize tenant-leading indexes matching actual API filters and ordering; inspect query plans for cross-domain joins and pagination. Most FK indexes are supplied; actor/history metadata is excluded from blanket indexing to control write overhead. Check index key sizes against target SQL Server version and measured values, including Unicode keys.
+- Dispatch overlap: use (tenant_id, asset_id or driver_id, status, start_at, end_at), but also stable-resource transactional locking. Indexes alone cannot enforce interval exclusion.
+- GPS: use tenant/asset/recorded_at history lookup, provider dedup unique key, and one latest-position row per asset. Retention batches and any partition strategy need real workload tests and FK/unique-index compatibility review.
+- Finance: use date/category filters and separately aggregated source allocations; check query plan for fanout, currency separation, and completeness flags. No indexed/materialized KPI views initially.
+- Review indexes after representative pilot load tests; collect p95 query duration, logical reads, lock waits, deadlocks, index maintenance and storage growth. Avoid redundant covering indexes and index hints without evidence. Schema changes are controlled migrations and should be tested on upgrade as well as empty DB.
