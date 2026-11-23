@@ -46,7 +46,7 @@ API variables: `FLEETOPS_ENV`, `FLEETOPS_DATABASE_NAME`, `FLEETOPS_SQL_SERVER`, 
 
 ## 5. Release verification
 
-The exact commit must pass `unit`, `integration`, and `selenium` checks. Then build, scan, and publish immutable web/API image digests to GHCR from a trusted reviewed commit; staging should deploy those digests. This release pipeline and a real Clerk Selenium journey still need their first GitHub run. Do not infer success from local tests.
+The exact commit must pass `unit`, `integration`, `selenium`, and `images` checks. The image check builds both containers and blocks on fixable critical vulnerabilities. Then publish immutable web/API image digests to GHCR from a trusted reviewed commit; staging should deploy those digests. The image check, GHCR publication, and a real Clerk Selenium journey still need their first GitHub run. Do not infer success from local tests.
 
 After deployment, record the web HTTPS URL, image digests, SQL revision, and smoke results. Check `/health/ready`, Clerk login, own carrier fleet read, wrong-carrier `403`, AI Fleet source links, unsupported-data wording, provider response and quota fallback, conversation ownership, and browser sign-out. The current production slice is **read-only fleet inventory and AI Fleet inventory Q&A**. Dispatch, GPS, maintenance, costs, files, a durable worker, and seven-day chat purging are not yet live features.
 

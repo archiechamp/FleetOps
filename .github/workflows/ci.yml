@@ -53,3 +53,27 @@ jobs:
         run: make test-selenium PYTHON=.venv/bin/python
       - if: always()
         run: docker compose --env-file .env.demo -f compose.demo.yaml down -v
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build exact API source
+        run: docker build -f apps/api/Dockerfile -t fleetops-api:ci .
+      - name: Build exact staging web source
+        run: docker build -f apps/web/Dockerfile.staging -t fleetops-web:ci .
+      - name: Scan API image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-api:ci
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+      - name: Scan web image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-web:ci
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
