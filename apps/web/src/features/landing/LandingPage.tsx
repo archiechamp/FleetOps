@@ -1,12 +1,19 @@
 type LandingPageProps = {
   onExplore: () => void;
   onTryCopilot: (question: string) => void;
+  mode?: "demo" | "production";
 };
 
 const prompts = [
   "Which trucks need service?",
   "What equipment is available?",
   "Where was DEMO-101 last seen?",
+];
+
+const productionPrompts = [
+  "What vehicles are in my fleet?",
+  "Which equipment is available?",
+  "Summarize my fleet inventory",
 ];
 
 const features = [
@@ -16,7 +23,15 @@ const features = [
   { number: "04", title: "Costs & reports", detail: "Review recorded expenses and fleet trends with explicit data limits." },
 ];
 
-export function LandingPage({ onExplore, onTryCopilot }: LandingPageProps) {
+const productionFeatures = [
+  { number: "01", title: "Fleet inventory", detail: "View vehicles recorded for your authorized carrier." },
+  { number: "02", title: "Carrier access", detail: "Clerk sign-in and server-verified membership protect carrier records." },
+  { number: "03", title: "AI Fleet", detail: "Ask read-only questions grounded in permitted fleet inventory." },
+  { number: "04", title: "Source references", detail: "Inspect the records and query time behind AI answers." },
+];
+
+export function LandingPage({ onExplore, onTryCopilot, mode = "demo" }: LandingPageProps) {
+  const production = mode === "production";
   return <main id="main-content" className="min-h-screen bg-[#f5f7fb] text-slate-900">
     <div className="bg-[#0a1630] text-white">
       <div className="mx-auto max-w-7xl px-6 lg:px-10">
@@ -28,20 +43,20 @@ export function LandingPage({ onExplore, onTryCopilot }: LandingPageProps) {
           <nav aria-label="Landing navigation" className="flex items-center gap-3 sm:gap-6">
             <a href="#features" className="hidden text-sm text-slate-200 hover:text-white sm:inline">Features</a>
             <a href="#copilot" className="hidden text-sm text-slate-200 hover:text-white sm:inline">AI Fleet</a>
-            <button type="button" onClick={onExplore} className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold hover:bg-white/10">Enter demo</button>
+            <button type="button" onClick={onExplore} className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold hover:bg-white/10">{production ? "Enter FleetOps" : "Enter demo"}</button>
           </nav>
         </header>
 
         <section className="grid items-center gap-12 py-16 lg:grid-cols-[1.05fr_0.95fr] lg:py-24">
           <div>
-            <p className="mb-5 inline-flex rounded-full border border-blue-300/30 bg-blue-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-blue-200">Local operations demo</p>
+            <p className="mb-5 inline-flex rounded-full border border-blue-300/30 bg-blue-400/10 px-3 py-1 text-xs font-bold uppercase tracking-[0.2em] text-blue-200">{production ? "Live staging pilot" : "Local operations demo"}</p>
             <h1 className="max-w-3xl text-5xl font-black leading-[1.08] tracking-tight sm:text-6xl">Know your fleet.<br /><span className="text-blue-400">Move with clarity.</span></h1>
-            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">Explore fleet inventory, dispatch availability, maintenance, last-known GPS, operating costs, and source-linked AI answers in one workspace.</p>
+            <p className="mt-6 max-w-xl text-lg leading-8 text-slate-300">{production ? "Explore your authorized carrier's fleet inventory and ask read-only AI Fleet questions grounded in its database records." : "Explore fleet inventory, dispatch availability, maintenance, last-known GPS, operating costs, and source-linked AI answers in one workspace."}</p>
             <div className="mt-9 flex flex-wrap gap-3">
-              <button type="button" onClick={onExplore} className="rounded-xl bg-blue-500 px-6 py-3 font-bold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-400">Explore the demo <span aria-hidden="true">→</span></button>
+              <button type="button" onClick={onExplore} className="rounded-xl bg-blue-500 px-6 py-3 font-bold text-white shadow-lg shadow-blue-950/40 hover:bg-blue-400">{production ? "Enter FleetOps" : "Explore the demo"} <span aria-hidden="true">→</span></button>
               <button type="button" onClick={() => onTryCopilot("")} className="rounded-xl border border-white/30 px-6 py-3 font-bold hover:bg-white/10">Try AI Fleet</button>
             </div>
-            <p className="mt-5 text-sm text-slate-400">Fictional demo records · Sign-in required · Not a live carrier system</p>
+            <p className="mt-5 text-sm text-slate-400">{production ? "Staging pilot · Authorized carrier access · Fleet inventory and read-only AI" : "Fictional demo records · Sign-in required · Not a live carrier system"}</p>
           </div>
 
           <div id="copilot" className="rounded-[2rem] border border-white/15 bg-white/10 p-3 shadow-2xl shadow-black/30 backdrop-blur-sm">
@@ -50,9 +65,9 @@ export function LandingPage({ onExplore, onTryCopilot }: LandingPageProps) {
                 <div><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">AI Fleet</p><h2 className="mt-2 text-2xl font-bold">Ask about your operation.</h2></div>
                 <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-800">Read only</span>
               </div>
-              <p className="mt-3 text-sm leading-6 text-slate-600">Choose a question to carry into the authenticated demo. Answers use permitted database records and show source references.</p>
+              <p className="mt-3 text-sm leading-6 text-slate-600">{production ? "Choose a question to carry into FleetOps after sign-in. Answers use permitted fleet records and show source references." : "Choose a question to carry into the authenticated demo. Answers use permitted database records and show source references."}</p>
               <div className="mt-6 space-y-2" aria-label="Example AI Fleet questions">
-                {prompts.map((prompt) => <button key={prompt} type="button" onClick={() => onTryCopilot(prompt)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-800 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">
+                {(production ? productionPrompts : prompts).map((prompt) => <button key={prompt} type="button" onClick={() => onTryCopilot(prompt)} className="flex w-full items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-left text-sm font-medium text-slate-800 hover:border-blue-300 hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-blue-700">
                   <span>{prompt}</span><span aria-hidden="true" className="text-blue-700">↗</span>
                 </button>)}
               </div>
@@ -64,18 +79,18 @@ export function LandingPage({ onExplore, onTryCopilot }: LandingPageProps) {
     </div>
 
     <section id="features" className="mx-auto max-w-7xl px-6 py-20 lg:px-10">
-      <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Built around daily decisions</p><h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">A connected view of your operation</h2><p className="mt-4 text-slate-600">The demo brings essential equipment, activity, and recorded cost information together without presenting stale positions or incomplete financials as final answers.</p></div>
+      <div className="max-w-2xl"><p className="text-xs font-bold uppercase tracking-[0.2em] text-blue-700">Built around daily decisions</p><h2 className="mt-3 text-3xl font-black tracking-tight sm:text-4xl">A connected view of your operation</h2><p className="mt-4 text-slate-600">{production ? "The staging pilot provides carrier-scoped fleet inventory and read-only AI answers with source references. Other operations modules remain in the local demo." : "The demo brings essential equipment, activity, and recorded cost information together without presenting stale positions or incomplete financials as final answers."}</p></div>
       <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {features.map((feature) => <article key={feature.number} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><span className="text-sm font-black text-blue-600">{feature.number}</span><h3 className="mt-6 text-lg font-bold">{feature.title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{feature.detail}</p></article>)}
+        {(production ? productionFeatures : features).map((feature) => <article key={feature.number} className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><span className="text-sm font-black text-blue-600">{feature.number}</span><h3 className="mt-6 text-lg font-bold">{feature.title}</h3><p className="mt-3 text-sm leading-6 text-slate-600">{feature.detail}</p></article>)}
       </div>
     </section>
 
     <section className="mx-auto max-w-7xl px-6 pb-20 lg:px-10">
       <div className="flex flex-col items-start justify-between gap-6 rounded-3xl bg-blue-700 p-8 text-white sm:p-10 lg:flex-row lg:items-center">
-        <div><h2 className="text-3xl font-black">Take the demo for a drive.</h2><p className="mt-2 max-w-xl text-blue-100">Sign in with a local demo account to explore workflows and ask AI Fleet about fictional carrier records.</p></div>
-        <button type="button" onClick={onExplore} className="shrink-0 rounded-xl bg-white px-6 py-3 font-bold text-blue-800 hover:bg-blue-50">Enter the demo <span aria-hidden="true">→</span></button>
+        <div><h2 className="text-3xl font-black">{production ? "Explore your fleet." : "Take the demo for a drive."}</h2><p className="mt-2 max-w-xl text-blue-100">{production ? "Sign in with an authorized Clerk account to view your carrier's inventory and ask AI Fleet questions." : "Sign in with a local demo account to explore workflows and ask AI Fleet about fictional carrier records."}</p></div>
+        <button type="button" onClick={onExplore} className="shrink-0 rounded-xl bg-white px-6 py-3 font-bold text-blue-800 hover:bg-blue-50">{production ? "Enter FleetOps" : "Enter the demo"} <span aria-hidden="true">→</span></button>
       </div>
     </section>
-    <footer className="border-t border-slate-200 px-6 py-7 text-center text-sm text-slate-500">FleetOps · Local evaluation demo · No live carrier data</footer>
+    <footer className="border-t border-slate-200 px-6 py-7 text-center text-sm text-slate-500">{production ? "FleetOps · Staging pilot · Carrier access required" : "FleetOps · Local evaluation demo · No live carrier data"}</footer>
   </main>;
 }
