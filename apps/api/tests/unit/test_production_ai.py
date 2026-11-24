@@ -63,7 +63,10 @@ def test_database_fallback_uses_authorized_facts_and_sources(monkeypatch) -> Non
                    "assets": [{"unit_number": "TRK-001", "asset_type": "TRACTOR",
                                "status": "AVAILABLE"}], "truncated": False}],
     })
-    response = client.post("/api/v1/ai/chat", json=_body("Summarize the fleet"))
+    response = client.post(
+        "/api/v1/ai/chat",
+        json={**_body("Summarize the fleet"), "trigger": "submit-message"},
+    )
     assert response.status_code == 200
     assert "TRK-001" in response.text
     assert "Verified database summary" in response.text
