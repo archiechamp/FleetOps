@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 
 import { LandingPage } from "../features/landing/LandingPage";
 import { ProductionAiPanel } from "./ProductionAiPanel";
+import { hostedJson } from "./hostedApi";
 
 type Carrier = { id: string; name: string; permissions: string[] };
 type FleetAsset = { id: string; unit_number: string; asset_type: string; make: string;
@@ -20,6 +21,7 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!isLoaded || !isSignedIn) {
@@ -31,21 +33,20 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
     }
     const controller = new AbortController();
     setLoading(true);
-    getToken().then((token) => fetch("/api/v1/me", {
-      headers: { Authorization: `Bearer ${token ?? ""}` }, signal: controller.signal,
-    })).then(async (response) => {
-      if (!response.ok) throw new Error(response.status === 403
-        ? "Your account has no active carrier membership." : "Could not load carrier access.");
-      return (await response.json()) as { carriers: Carrier[] };
-    }).then((result) => {
+    getToken().then((token) => hostedJson<{ carriers: Carrier[] }>("/api/v1/me", token,
+      undefined, controller.signal)).then((result) => {
       setCarriers(result.carriers);
       setCarrierId(result.carriers[0]?.id ?? "");
       setError("");
     }).catch((reason: unknown) => {
-      if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Sign-in failed");
+      if (!controller.signal.aborted) {
+        setCarriers([]);
+        setCarrierId("");
+        setError(reason instanceof Error ? reason.message : "Sign-in failed");
+      }
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [getToken, isLoaded, isSignedIn]);
+  }, [getToken, isLoaded, isSignedIn, refreshKey]);
 
   useEffect(() => {
     setAssets([]);
@@ -54,18 +55,13 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
     if (!carrierId || !isSignedIn) return;
     const controller = new AbortController();
     setLoading(true);
-    getToken().then((token) => fetch("/api/v1/assets", {
-      headers: { Authorization: `Bearer ${token ?? ""}`, "X-Tenant-Id": carrierId },
-      signal: controller.signal,
-    })).then(async (response) => {
-      if (!response.ok) throw new Error("Could not load fleet inventory.");
-      return (await response.json()) as FleetAsset[];
-    }).then((rows) => { setAssets(rows); setError(""); })
+    getToken().then((token) => hostedJson<FleetAsset[]>("/api/v1/assets", token,
+      carrierId, controller.signal)).then((rows) => { setAssets(rows); setError(""); })
       .catch((reason: unknown) => {
         if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Could not load fleet inventory.");
       }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [carrierId, getToken, isSignedIn]);
+  }, [carrierId, getToken, isSignedIn, refreshKey]);
 
   useEffect(() => {
     if (openAiOnEntry && carrierId) setAiOpen(true);
@@ -107,7 +103,9 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
         </button>)}
       </nav>}
       {loading && <p role="status" className="mt-6">Loading fleet…</p>}
-      {error && <p role="alert" className="mt-6 text-red-700">{error}</p>}
+      {error && <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+        <p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={() => setRefreshKey((key) => key + 1)}>Retry</button>
+      </div>}
       {!loading && !error && carrierId && <div className="space-y-5">
         {view === "Overview" && <>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
