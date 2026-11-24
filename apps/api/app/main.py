@@ -1,9 +1,13 @@
-from fastapi import FastAPI, HTTPException
+import logging
+
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import get_settings
 
+logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     settings = get_settings()
@@ -29,6 +33,12 @@ def create_app() -> FastAPI:
 
         app.include_router(production_fleet_router, prefix="/api/v1")
         app.include_router(production_ai_router, prefix="/api/v1")
+
+        @app.exception_handler(SQLAlchemyError)
+        async def unavailable_database(request: Request, error: SQLAlchemyError) -> JSONResponse:
+            logger.warning("FleetOps database unavailable for %s (%s)", request.url.path,
+                           type(error).__name__)
+            return JSONResponse(status_code=503, content={"detail": "Fleet service is temporarily unavailable"})
 
     @app.get("/health/live", tags=["health"])
     def live() -> dict[str, str]:
