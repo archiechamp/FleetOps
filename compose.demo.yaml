@@ -28,6 +28,7 @@ services:
       FLEETOPS_SQL_SERVER: sqlserver
       FLEETOPS_TEST_SA_PASSWORD: ${FLEETOPS_TEST_SA_PASSWORD:?}
       FLEETOPS_DEMO_RUNTIME_PASSWORD: ${FLEETOPS_DEMO_RUNTIME_PASSWORD:?}
+      FLEETOPS_DEMO_SESSION_SECRET: ${FLEETOPS_DEMO_SESSION_SECRET:?}
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -38,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    command: ["alembic", "upgrade", "head"]
+    command: ["alembic", "-x", "target=demo@head", "upgrade", "demo@head"]
     environment: *setup_env
     depends_on:
       bootstrap:

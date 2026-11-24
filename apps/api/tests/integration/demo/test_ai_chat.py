@@ -1,12 +1,17 @@
 """Real FastAPI, demo membership and SQL path with a deterministic model boundary."""
 
 import json
+import os
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 from pydantic import SecretStr
+from sqlalchemy import text
+from sqlalchemy.engine import URL
 
+from app.core.db import make_sql_engine, tenant_connection
 from app.core.demo_auth import _memberships
+from app.core.demo_db import get_demo_engine
 from app.main import create_app
 from app.modules.ai import routes
 from app.modules.ai.database_answer import answer_from_database
@@ -21,6 +26,11 @@ class FakeProvider:
     async def answer(self, question, history, facts) -> str:
         self.calls.append((question, history, facts))
         return "The saved demo carrier has fleet records."
+
+
+def _enable_fake_model(monkeypatch) -> None:
+    monkeypatch.setattr(routes, "get_settings", lambda: type("Settings", (), {
+        "openai_api_key": SecretStr("test-only-key")})())
 
 
 def _login(client: TestClient, username: str) -> str:
@@ -44,6 +54,7 @@ def _events(response) -> list[dict]:
 def test_grounded_stream_history_feedback_and_member_isolation(monkeypatch) -> None:
     fake = FakeProvider()
     monkeypatch.setattr(routes, "get_provider", lambda: fake)
+    _enable_fake_model(monkeypatch)
     conversation_id = str(uuid4())
     app = create_app()
     with TestClient(app) as creator:
@@ -81,6 +92,7 @@ def test_grounded_stream_history_feedback_and_member_isolation(monkeypatch) -> N
 def test_reader_cost_question_and_forbidden_mutation_use_no_model(monkeypatch) -> None:
     fake = FakeProvider()
     monkeypatch.setattr(routes, "get_provider", lambda: fake)
+    _enable_fake_model(monkeypatch)
     app = create_app()
     with TestClient(app) as reader:
         tenant = _login(reader, "demo_reader")
@@ -152,14 +164,49 @@ def test_named_asset_and_trip_questions_resolve_from_tenant_tables() -> None:
                for source in bundle["sources"])
     assert not any(source["kind"] == "carrier" for source in bundle["sources"])
 
-    assignments = next(fact["assignment_windows"] for fact in gather_facts(member, "trip")["facts"]
-                       if fact["tool"] == "getAvailableVehicles")
-    assert assignments
-    trip = assignments[0]
-    trip_question = f"Tell me something about {trip['trip_reference']}"
-    trip_bundle = gather_facts(member, trip_question)
-    trip_answer = answer_from_database(trip_question, trip_bundle, "AI provider credit is exhausted.")
-    assert f"{trip['trip_reference']}: truck {trip['truck_unit']}" in trip_answer
-    assert any(source["kind"] == "assignment" and source["id"] == str(trip["id"])
-               for source in trip_bundle["sources"])
-    assert not any(source["label"] == "1" for source in trip_bundle["sources"])
+    truck = next(row for row in assets if row["asset_type"] == "TRACTOR")
+    assignment_id = str(uuid4())
+    trip_reference = f"TEST-TRIP-{uuid4().hex[:12]}"
+    with tenant_connection(get_demo_engine(), member.tenant_id) as connection:
+        connection.commit()
+        with connection.begin():
+            connection.execute(text("""
+                INSERT INTO demo.assignments
+                    (id, tenant_id, truck_asset_id, trip_reference,
+                     starts_at, ends_at, created_by)
+                VALUES (:id, :tenant, :truck, :trip,
+                        '2030-01-01T00:00:00', '2030-01-02T00:00:00', :member)
+            """), {"id": assignment_id, "tenant": str(member.tenant_id),
+                   "truck": str(truck["id"]), "trip": trip_reference,
+                   "member": str(member.membership_id)})
+    try:
+        assignments = next(fact["assignment_windows"]
+                           for fact in gather_facts(member, "trip")["facts"]
+                           if fact["tool"] == "getAvailableVehicles")
+        trip = next(row for row in assignments if str(UUID(str(row["id"]))) == assignment_id)
+        trip_question = f"Tell me something about {trip['trip_reference']}"
+        trip_bundle = gather_facts(member, trip_question)
+        trip_answer = answer_from_database(trip_question, trip_bundle,
+                                           "AI provider credit is exhausted.")
+        assert f"{trip['trip_reference']}: truck {trip['truck_unit']}" in trip_answer
+        assert any(source["kind"] == "assignment" and source["id"] == str(trip["id"])
+                   for source in trip_bundle["sources"])
+        assert not any(source["label"] == "1" for source in trip_bundle["sources"])
+    finally:
+        admin_engine = make_sql_engine(URL.create(
+            "mssql+pyodbc", username="sa", password=os.environ["FLEETOPS_TEST_SA_PASSWORD"],
+            host=os.environ["FLEETOPS_SQL_SERVER"], database="fleetops_demo_001",
+            query={"driver": "ODBC Driver 18 for SQL Server", "Encrypt": "yes",
+                   "TrustServerCertificate": "yes"},
+        ))
+        try:
+            with admin_engine.begin() as connection:
+                connection.execute(text("""
+                    DECLARE @selected UNIQUEIDENTIFIER = CONVERT(UNIQUEIDENTIFIER, :tenant);
+                    EXEC sys.sp_set_session_context @key=N'tenant_id', @value=@selected
+                """), {"tenant": str(member.tenant_id)})
+                connection.execute(text("""
+                    DELETE FROM demo.assignments WHERE tenant_id=:tenant AND id=:id
+                """), {"tenant": str(member.tenant_id), "id": assignment_id})
+        finally:
+            admin_engine.dispose()

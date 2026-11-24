@@ -343,3 +343,69 @@ Delivery design and scaffolding sequence: [`docs/development-and-delivery.md`](d
 - https://www.fmcsa.dot.gov/hours-service/elds/general-information-about-eld-rule
 
 **End — spec.md v1.5**
+
+## Architecture Notes — System and AI Module
+
+> **Design status:** Target architecture for FleetOps. This section defines product-level boundaries and acceptance expectations; `docs/architecture-notes.md` remains the technical design authority for decisions, alternatives, and provisional details. This section does not assert that every component is implemented.
+
+### System architecture
+
+```text
+Browser (React + TypeScript + Vite + Tailwind)
+  | authenticated, carrier-scoped HTTPS requests
+  v
+FastAPI application
+  |-- identity verification and carrier membership / RBAC
+  |-- fleet, trip, dispatch, maintenance, document, GPS, cost APIs
+  |-- read-only AI chat orchestration and approved retrieval tools
+  |-- domain services, SQLAlchemy repositories, audit / outbox
+  |
+  +--> SQL Server (tenant-owned operational records and chat metadata)
+  +--> private document storage (authorized, expiring access)
+  +--> durable workers (GPS, imports, notifications, other long tasks)
+  +--> configured model provider (OpenAI or Claude, through typed interface)
+```
+
+- The browser never connects directly to SQL Server. It calls a shared typed API client generated or validated from OpenAPI. Query keys include carrier context, and switching carriers or signing out clears carrier-scoped caches.
+- FastAPI verifies identity, active carrier membership, and action-specific permission on each request. Client-supplied carrier IDs and roles are never treated as authority. Every tenant-owned query, mutation, export, document access, and AI tool invocation is scoped to verified membership.
+- Domain services own business rules and transactions. Dispatch assignment, trip transitions, cost finalization, and outbox writes are transactional. SQL Server is the selected operational database; versioned Alembic migrations control schema changes.
+- Durable workers handle ingestion, imports, and long tasks. GPS events preserve provider time, ingestion time, source, and idempotency key. Older events cannot replace a newer latest-known position.
+- Private documents use server-authorized, short-lived access. Financial records use fixed-precision decimal values and explicit currency, units, mileage denominator, and completeness.
+- Docker Compose is the reproducible local runtime. Deployment topology, provider choice, storage implementation, and worker technology remain subject to the decisions and gates recorded in `docs/architecture-notes.md` and `docs/development-and-delivery.md`.
+
+### AI module responsibilities and boundaries
+
+The AI module is a **read-only question-answering layer over permitted FleetOps records**. `@ai-sdk/react` provides the chat UI transport; the Python backend owns model calls, retrieval, authorization, source assembly, and response policy. A typed provider interface allows the configured OpenAI or Claude model to be changed without changing business tool contracts.
+
+```text
+User question
+  -> authenticated chat endpoint
+  -> verified user + carrier context and usage cap
+  -> bounded model call / approved tool selection
+  -> allowlisted read-only tool with fresh permission check
+  -> typed, bounded repository query against SQL Server
+  -> answer with source record references and timestamps
+  -> streamed or completed response to UI
+```
+
+The approved retrieval surface covers only the record classes and fields defined by the AI requirements: carrier information, fleet inventory, dispatch and trips, last-known GPS positions, maintenance, documents metadata, operating costs, and reports. Each tool has a typed input/output schema, bounded result size, deterministic carrier scoping, and role-appropriate field filtering. The model receives only the minimum data needed for the current question. Free-form SQL, shell, arbitrary network access, write tools, and model-triggered changes to assignments, costs, payments, permissions, or compliance status are prohibited.
+
+Before each tool invocation, the backend rechecks membership and permission, validates all requested record IDs within the verified carrier, and denies cross-carrier access. Chat history does not confer access after a user's role or membership changes. Retrieved notes and uploaded documents are untrusted input; instructions inside them cannot override system policy or authorize another tool.
+
+Answers must identify the supporting record(s) and relevant last-updated or source time. GPS answers say **last known** and label stale positions. Cost answers state currency, mileage basis, and data completeness; missing expense data is not zero, and direct contribution is not net profit. If a question has no reliable permitted source, the assistant says that it cannot verify the answer. It must not invent customer records or make conclusive ELD, HOS, or regulatory-compliance claims.
+
+### AI failure behavior, privacy, and observability
+
+- Apply per-user and per-carrier usage limits, model timeout and cost limits, bounded retries, and a defined response for provider unavailability or stream disconnects.
+- Keep chat content and tool results carrier-scoped. Restrict financial, driver PII, precise location, and private document data by permission. Do not place credentials in prompts, logs, source code, or test snapshots.
+- Record minimal redacted telemetry: request correlation ID, tool name, latency, outcome, provider failure category, and source record identifiers where authorized. Audit access without logging sensitive payloads.
+- Make source references and timestamps visible in the chat UI; display a clear error or unavailable state rather than a fabricated fallback answer.
+
+### Architecture acceptance criteria
+
+1. Direct API and AI-tool requests with another carrier's record ID are denied, including after membership revocation or carrier switching.
+2. Concurrent dispatch requests cannot produce conflicting assignments; retries with the same durable key do not create duplicates.
+3. Out-of-order GPS events do not overwrite newer positions, and stale or missing locations are labeled accurately.
+4. Cost reports and AI answers distinguish missing data from zero and disclose mileage basis and completeness.
+5. AI golden cases return correct source references; no-record, prompt-injection, forbidden-mutation, provider-outage, and streaming-disconnect cases have safe, testable outcomes.
+6. Unit, SQL Server-backed integration, and Selenium browser tests cover the affected workflows under the repository's DEV-008 test matrix.

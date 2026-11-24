@@ -1,0 +1,79 @@
+name: FleetOps checks
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24.15.0'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Make isolated local-only credentials
+        run: python3 tools/write_ci_demo_env.py
+      - name: Run unit and web checks
+        run: make test-unit
+      - if: always()
+        run: docker compose --env-file .env.demo -f compose.demo.yaml down
+
+  integration:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Make isolated local-only credentials
+        run: python3 tools/write_ci_demo_env.py
+      - name: Run SQL Server-backed checks
+        run: make test-integration
+      - if: always()
+        run: docker compose --env-file .env.demo -f compose.demo.yaml down -v
+
+  selenium:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Make isolated local-only credentials
+        run: python3 tools/write_ci_demo_env.py
+      - name: Install locked browser test dependencies
+        run: |
+          python3 -m venv .venv
+          .venv/bin/pip install --disable-pip-version-check pytest==9.2.0 selenium==4.53.0
+      - name: Run headless Chrome journeys
+        run: make test-selenium PYTHON=.venv/bin/python
+      - if: always()
+        run: docker compose --env-file .env.demo -f compose.demo.yaml down -v
+
+  images:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - name: Build exact API source
+        run: docker build -f apps/api/Dockerfile -t fleetops-api:ci .
+      - name: Build exact staging web source
+        run: docker build -f apps/web/Dockerfile.staging -t fleetops-web:ci .
+      - name: Scan API image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-api:ci
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table
+      - name: Scan web image
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: fleetops-web:ci
+          severity-cutoff: critical
+          only-fixed: true
+          output-format: table

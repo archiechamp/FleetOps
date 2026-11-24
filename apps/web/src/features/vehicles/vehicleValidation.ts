@@ -22,7 +22,6 @@ export function isWellFormedUnicode(value: string): boolean {
   }
   return true;
 }
-
 export function validateVehicleText(field: VehicleTextField, input: string): TextValidationResult {
   if (!isWellFormedUnicode(input)) {
     return { valid: false, error: "Enter well-formed Unicode text.", codeUnits: null };

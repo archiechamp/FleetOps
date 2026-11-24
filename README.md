@@ -2,6 +2,8 @@
 
 ## Local operations demo
 
+For live-hosting prerequisites and the current release blockers, see [Railway deployment readiness](docs/railway-deployment-readiness.md). The passwordless local demo must remain on loopback until the production identity and release gates are complete.
+
 Run `powershell -NoProfile -ExecutionPolicy Bypass -File tools/start_demo.ps1` from the repository root, then open <http://localhost:18080>. The landing page leads to a passwordless local demo account picker and lets you carry an example question into the AI Copilot. See [docs/demo.md](docs/demo.md) for fleet and dispatch workflows, reports, Copilot, and shutdown. The script creates ignored SQL and session secrets; no provider key is included in this repository.
 
 **Version:** 1.5  

@@ -4,7 +4,7 @@ from alembic import op
 
 revision = "0004_demo_operations"
 down_revision = "0003_vehicle_retry"
-branch_labels = None
+branch_labels = ("demo",)
 depends_on = None
 
 
