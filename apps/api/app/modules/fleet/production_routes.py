@@ -24,10 +24,19 @@ def me(subject: Annotated[str, Depends(verified_subject)]) -> dict:
     members = verified_memberships(subject)
     if not members:
         raise HTTPException(403, "No active carrier membership")
-    return {"carriers": [
-        {"id": str(member.tenant_id), "permissions": sorted(member.permissions)}
-        for member in members
-    ]}
+    carriers = []
+    for member in members:
+        with tenant_connection(get_production_engine(), member.tenant_id) as connection:
+            name = connection.execute(text("""
+                SELECT name FROM core.tenants
+                WHERE id = :tenant AND status = 'ACTIVE'
+            """), {"tenant": str(member.tenant_id)}).scalar_one_or_none()
+        if name is not None:
+            carriers.append({"id": str(member.tenant_id), "name": name,
+                             "permissions": sorted(member.permissions)})
+    if not carriers:
+        raise HTTPException(403, "No active carrier membership")
+    return {"carriers": carriers}
 
 
 @router.get("/vehicles", response_model=list[Vehicle])
