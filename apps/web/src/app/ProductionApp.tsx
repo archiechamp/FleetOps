@@ -6,7 +6,7 @@ import { LandingPage } from "../features/landing/LandingPage";
 import { ProductionAiPanel } from "./ProductionAiPanel";
 
 type Vehicle = components["schemas"]["Vehicle"];
-type Carrier = { id: string; permissions: string[] };
+type Carrier = { id: string; name: string; permissions: string[] };
 
 function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEntry: boolean; initialQuestion: string; onBack: () => void }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
@@ -70,7 +70,7 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
     <button type="button" className="mb-5 text-sm text-blue-700 underline" onClick={onBack}>Back to FleetOps</button>
     <header className="flex items-center justify-between border-b pb-5">
       <div><p className="text-xs font-bold uppercase tracking-widest text-blue-700">FleetOps</p>
-        <h1 className="text-3xl font-bold">OOOFleet inventory</h1></div>
+      <h1 className="text-3xl font-bold">Fleet inventory</h1></div>
       {isSignedIn && <div className="flex items-center gap-3">
         {carrierId && <button type="button" className="rounded bg-blue-700 px-4 py-2 text-white" onClick={() => setAiOpen(true)}>Ask Fleet</button>}
         <UserButton />
@@ -86,7 +86,7 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
       {carriers.length > 0 && <label className="mt-8 block">Carrier
         <select className="mt-2 block rounded border p-2" value={carrierId}
           onChange={(event) => setCarrierId(event.target.value)}>
-          {carriers.map((carrier) => <option key={carrier.id} value={carrier.id}>{carrier.id}</option>)}
+        {carriers.map((carrier) => <option key={carrier.id} value={carrier.id}>{carrier.name}</option>)}
         </select>
       </label>}
       {loading && <p role="status" className="mt-6">Loading fleet…</p>}
