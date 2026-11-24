@@ -3,7 +3,8 @@
 This procedure populates **only** the existing Azure SQL database
 `fleetops-staging-db`. It does not copy the local demo database, seed a
 production carrier, or enable dispatch, GPS, maintenance, or costs in the
-hosted pilot. The result is two clearly fictional tractor records for the
+hosted pilot. The result is two clearly fictional tractor records and two
+fictional trailer records for the
 already-onboarded Clerk pilot carrier.
 
 ## Preconditions
@@ -28,13 +29,18 @@ Run `python -m tools.seed_staging_fictional_fleet` from `/workspace/apps/api`.
 The tool refuses another database, an unexpected schema revision, an inactive
 or non-staging carrier, and a carrier containing unrelated assets. Its
 deterministic asset IDs allow a safe retry. It prints only the carrier ID and
-fictional vehicle count.
+fictional vehicle count. Re-running the guarded seed after the updated image
+is deployed adds only the two deterministic trailer assets to the previously
+seeded tractors.
 
 ## Verification
 
 After the job succeeds, a signed-in pilot reader should see carrier
-`FleetOps Staging (Fictional Demo)` and vehicles `DEMO-101` and `DEMO-102`.
-Check that the Azure API returns only these authorized carrier vehicles and
+`FleetOps Staging (Fictional Demo)`, trucks `DEMO-101` and `DEMO-102`, and
+trailers `TRL-301` and `TRL-302`. The hosted Overview and Fleet tabs use
+`GET /api/v1/assets` and show only recorded status counts. Service due,
+dispatch, GPS, documents, and costs remain unavailable in hosted staging.
+Check that the Azure API returns only these authorized carrier assets and
 that an unrelated Clerk account receives 403. Ask AI Fleet to summarize the
 fleet and verify its answer cites the fictional records.
 
@@ -42,7 +48,7 @@ fleet and verify its answer cites the fictional records.
 
 Keep the recorded original carrier name. If the staging seed must be removed,
 review the exact tenant and deterministic IDs, then delete the two
-`fleet.vehicles` rows followed by their `fleet.assets` rows in one controlled
+`fleet.vehicles` rows followed by their four `fleet.assets` rows in one controlled
 transaction and restore the original carrier name. Do not delete the carrier,
 Clerk user, membership, or global reference data. Capture the SQL job result
 and recheck the signed-in empty state.
