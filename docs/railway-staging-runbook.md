@@ -1,6 +1,12 @@
 # FleetOps staging deployment runbook
 
-**Status, 2026-11-24:** Prepared locally; no Railway service, Azure SQL Database, funded model account, or live URL has been verified. This is a controlled staging procedure for the read-only fleet and AI slice. The local demo image must remain loopback-only.
+> **Current topology (2026-11-24):** Railway Trial hosts the web service; Azure
+> Container Apps hosts the API beside Azure SQL. Follow
+> [the Azure API / Railway web runbook](azure-railway-staging-runbook.md) for the
+> active staging release. The two-Railway-service procedure below is retained
+> only as historical planning context.
+
+**Historical status:** This two-Railway-service procedure was prepared before the Azure API topology was selected. Its prerequisite status below is retained for context. Use the linked current runbook for the staging release.
 
 ## 1. External prerequisites
 
