@@ -1,5 +1,17 @@
 type ApiErrorBody = { detail?: unknown };
 
+export function hostedErrorDetail(detail: unknown, fallback: string): string {
+  if (typeof detail === "string" && detail.trim()) return detail;
+  if (Array.isArray(detail)) {
+    const messages = detail.map((item: unknown) => {
+      if (!item || typeof item !== "object" || !("msg" in item)) return "";
+      return typeof item.msg === "string" ? item.msg : "";
+    }).filter(Boolean);
+    if (messages.length) return messages.join("; ");
+  }
+  return fallback;
+}
+
 const RETRY_DELAYS_MS = [1500, 3000];
 
 function aborted(signal?: AbortSignal): boolean {
@@ -40,7 +52,7 @@ export async function hostedJson<T>(url: string, token: string | null, carrierId
     if (response.status === 401) throw new Error("Your sign-in expired. Sign out and sign in again.");
     if (response.status === 403) {
       const body = (await response.json().catch(() => ({}))) as ApiErrorBody;
-      throw new Error(typeof body.detail === "string" ? body.detail : "Carrier access denied.");
+      throw new Error(hostedErrorDetail(body.detail, "Carrier access denied."));
     }
     throw new Error(response.status >= 500
       ? "Fleet service is temporarily unavailable. Try again."

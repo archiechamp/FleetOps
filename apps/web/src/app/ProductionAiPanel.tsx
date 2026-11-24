@@ -2,6 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useAuth } from "@clerk/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { hostedErrorDetail } from "./hostedApi";
 
 type Source = { kind: string; id: string; label: string; updated_at: string | null };
 type Conversation = { id: string; title: string | null; updated_at: string };
@@ -34,8 +35,8 @@ export function ProductionAiPanel({ carrierId, initialQuestion = "", onClose }: 
       headers.set("X-Tenant-Id", carrierId);
       const response = await fetch(url, { ...init, headers });
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(body.detail || `AI Fleet request failed (${response.status})`);
+        const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
+        throw new Error(hostedErrorDetail(body.detail, `AI Fleet request failed (${response.status})`));
       }
       return response;
     },

@@ -4,12 +4,12 @@ import { useEffect, useState } from "react";
 import { LandingPage } from "../features/landing/LandingPage";
 import { ProductionAiPanel } from "./ProductionAiPanel";
 import { hostedJson } from "./hostedApi";
+import { CarrierBar, WorkspaceHeader, WorkspaceNav, type WorkspaceView } from "./WorkspaceChrome";
 
 type Carrier = { id: string; name: string; permissions: string[] };
 type FleetAsset = { id: string; unit_number: string; asset_type: string; make: string;
   model: string; model_year: number; ownership_type: string; status: string };
-type View = "Overview" | "Fleet" | "Dispatch" | "GPS" | "Maintenance" | "Documents" | "Costs" | "Reports";
-const views: View[] = ["Overview", "Fleet", "Dispatch", "GPS", "Maintenance", "Documents", "Costs", "Reports"];
+type View = WorkspaceView;
 const statuses = ["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "MAINTENANCE", "OUT_OF_SERVICE", "INACTIVE"];
 
 function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEntry: boolean; initialQuestion: string; onBack: () => void }) {
@@ -73,16 +73,10 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
   const available = assets.filter((asset) => asset.status === "AVAILABLE").length;
 
   return <main id="main-content" className="mx-auto max-w-6xl p-6 md:p-10">
-    <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-6">
-      <div><button type="button" className="mb-3 text-sm text-blue-700 underline" onClick={onBack}>Back to FleetOps</button>
-      <p className="text-sm font-bold uppercase tracking-[0.24em] text-blue-700">FleetOps · Hosted staging</p>
-      <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">Fleet vehicles</h1>
-      <p className="mt-2 text-slate-600">Inspect equipment for an authorized carrier.</p></div>
-      {isSignedIn && <div className="flex items-center gap-3">
-        {carrierId && <button type="button" className="rounded bg-blue-700 px-4 py-2 text-white" onClick={() => setAiOpen(true)}>Ask Fleet</button>}
-        <UserButton />
-      </div>}
-    </header>
+    <WorkspaceHeader environment="Hosted staging" description="Inspect equipment for an authorized carrier." back={onBack} actions={isSignedIn && <>
+      {carrierId && <button type="button" className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white" onClick={() => setAiOpen(true)}>Ask Fleet</button>}
+      <UserButton />
+    </>} />
     {!isLoaded && <p role="status" className="mt-8">Checking sign-in…</p>}
     {isLoaded && !isSignedIn && <section className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
       <h2 className="text-xl font-semibold">Sign in to FleetOps</h2>
@@ -90,18 +84,9 @@ function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEn
       <SignInButton><button type="button" className="mt-5 w-full rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Sign in</button></SignInButton>
     </section>}
     {isSignedIn && <>
-      {carriers.length > 0 && <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl bg-slate-900 p-4 text-white"><label className="text-sm">Carrier
-        <select className="mt-1 block min-w-56 rounded-md border bg-white p-2 text-slate-900" value={carrierId}
-          onChange={(event) => setCarrierId(event.target.value)}>
-        {carriers.map((carrier) => <option key={carrier.id} value={carrier.id}>{carrier.name}</option>)}
-        </select>
-      </label><p className="text-xs text-slate-200">Clerk authenticated · Fleet reader</p></div>}
-      {carrierId && <nav aria-label="Fleet workspace" className="my-5 flex flex-wrap gap-2">
-        {views.map((item) => <button key={item} type="button" aria-current={view === item ? "page" : undefined}
-          onClick={() => setView(item)} className={`rounded-lg border px-4 py-2 text-sm font-medium focus-visible:outline-2 focus-visible:outline-blue-700 ${view === item ? "border-blue-700 bg-blue-700 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50"}`}>
-          {item}
-        </button>)}
-      </nav>}
+      {carriers.length > 0 && <CarrierBar id={carrierId} carriers={carriers} onChange={setCarrierId}
+        account="Clerk account" access="Read-only fleet access" />}
+      {carrierId && <WorkspaceNav view={view} onChange={setView} />}
       {loading && <p role="status" className="mt-6">Loading fleet…</p>}
       {error && <div role="alert" className="mt-6 rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
         <p>{error}</p><button type="button" className="mt-2 font-semibold underline" onClick={() => setRefreshKey((key) => key + 1)}>Retry</button>
