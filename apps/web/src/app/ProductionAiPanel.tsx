@@ -18,12 +18,12 @@ function sourceData(parts: UIMessage["parts"]): { records: Source[]; queried_at:
   return null;
 }
 
-export function ProductionAiPanel({ carrierId, onClose }: { carrierId: string; onClose: () => void }) {
+export function ProductionAiPanel({ carrierId, initialQuestion = "", onClose }: { carrierId: string; initialQuestion?: string; onClose: () => void }) {
   const { getToken } = useAuth();
   const [conversationId, setConversationId] = useState<string>(() => crypto.randomUUID());
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [details, setDetails] = useState<AiStatus | null>(null);
-  const [input, setInput] = useState("");
+  const [input, setInput] = useState(initialQuestion);
   const [localError, setLocalError] = useState("");
   const transport = useMemo(() => new DefaultChatTransport({
     api: "/api/v1/ai/chat",
