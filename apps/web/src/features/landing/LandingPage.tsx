@@ -10,7 +10,7 @@ const prompts = [
 ];
 
 const features = [
-  { number: "01", title: "Fleet inventory", detail: "Keep trucks and trailers, ownership, mileage, and operating status in one view." },
+  { number: "01", title: "xFleet inventory", detail: "Keep trucks and trailers, ownership, mileage, and operating status in one view." },
   { number: "02", title: "Dispatch availability", detail: "Reserve equipment for a trip window and see conflicts before assigning it." },
   { number: "03", title: "Maintenance & GPS", detail: "Track service due dates and clearly labeled last-known vehicle positions." },
   { number: "04", title: "Costs & reports", detail: "Review recorded expenses and fleet trends with explicit data limits." },

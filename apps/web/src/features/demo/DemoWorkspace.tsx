@@ -178,7 +178,7 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
     {notice && <p role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">{notice}</p>}
 
     {view === "Fleet" && <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="Fleet inventory">
+      <Panel title="VFleet inventory">
         {assets.length === 0 ? <p>No equipment registered.</p> : <ul className="divide-y divide-slate-200">{assets.map((asset) =>
           <li key={asset.id} className="py-3"><strong>{asset.unit_number}</strong> · {asset.asset_type === "TRACTOR" ? "Truck" : "Trailer"} · {asset.status}<br />
             <span className="text-sm text-slate-600">{asset.model_year} {asset.make} {asset.model} · {asset.ownership_type} · {asset.terminal ?? "No terminal"} · {asset.odometer_miles == null ? "Odometer unknown" : `${asset.odometer_miles} mi`}</span></li>)}</ul>}

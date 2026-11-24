@@ -64,7 +64,7 @@ function FleetWorkspace() {
   return <main className="mx-auto max-w-5xl p-6">
     <header className="flex items-center justify-between border-b pb-5">
       <div><p className="text-xs font-bold uppercase tracking-widest text-blue-700">FleetOps</p>
-        <h1 className="text-3xl font-bold">Fleet inventory</h1></div>
+        <h1 className="text-3xl font-bold">OOOFleet inventory</h1></div>
       {isSignedIn && <div className="flex items-center gap-3">
         {carrierId && <button type="button" className="rounded bg-blue-700 px-4 py-2 text-white" onClick={() => setAiOpen(true)}>Ask Fleet</button>}
         <UserButton />
