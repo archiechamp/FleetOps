@@ -1,8 +1,10 @@
 """Initial read-only production fleet slice."""
 
 from typing import Annotated
+from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import text
 
 from app.core.clerk_auth import (
@@ -17,6 +19,35 @@ from app.modules.fleet.routes import _PROJECTION, _vehicle
 from app.modules.fleet.schemas import Vehicle
 
 router = APIRouter(tags=["production fleet"])
+
+
+class FleetAsset(BaseModel):
+    id: UUID
+    unit_number: str
+    asset_type: str
+    make: str
+    model: str
+    model_year: int
+    ownership_type: str
+    status: str
+
+
+@router.get("/assets", response_model=list[FleetAsset])
+def list_assets(member: Annotated[ClerkMember, Depends(selected_clerk_member)]) -> list[FleetAsset]:
+    """Bounded inventory for the verified carrier, including trailers."""
+    if "fleet.vehicle.read" not in member.permissions:
+        raise HTTPException(403, "Fleet access denied")
+    with tenant_connection(get_production_engine(), member.tenant_id) as connection:
+        rows = connection.execute(text("""
+            SELECT a.id, a.unit_number, t.code AS asset_type, a.make, a.model,
+                   a.model_year, a.ownership_type, a.status
+            FROM fleet.assets AS a
+            JOIN ref.asset_types AS t ON t.id = a.asset_type_id
+            WHERE a.tenant_id = :tenant
+            ORDER BY a.unit_number, a.id
+            OFFSET 0 ROWS FETCH NEXT 100 ROWS ONLY
+        """), {"tenant": str(member.tenant_id)}).mappings().all()
+    return [FleetAsset.model_validate(row) for row in rows]
 
 
 @router.get("/me")
