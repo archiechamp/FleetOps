@@ -2,12 +2,13 @@ import { ClerkProvider, SignInButton, UserButton, useAuth } from "@clerk/react";
 import { useEffect, useState } from "react";
 
 import type { components } from "../../../../packages/api-contracts/vehicle-openapi";
+import { LandingPage } from "../features/landing/LandingPage";
 import { ProductionAiPanel } from "./ProductionAiPanel";
 
 type Vehicle = components["schemas"]["Vehicle"];
 type Carrier = { id: string; permissions: string[] };
 
-function FleetWorkspace() {
+function FleetWorkspace({ openAiOnEntry, initialQuestion, onBack }: { openAiOnEntry: boolean; initialQuestion: string; onBack: () => void }) {
   const { getToken, isLoaded, isSignedIn } = useAuth();
   const [carriers, setCarriers] = useState<Carrier[]>([]);
   const [carrierId, setCarrierId] = useState("");
@@ -61,7 +62,12 @@ function FleetWorkspace() {
     return () => controller.abort();
   }, [carrierId, getToken, isSignedIn]);
 
+  useEffect(() => {
+    if (openAiOnEntry && carrierId) setAiOpen(true);
+  }, [carrierId, openAiOnEntry]);
+
   return <main className="mx-auto max-w-5xl p-6">
+    <button type="button" className="mb-5 text-sm text-blue-700 underline" onClick={onBack}>Back to FleetOps</button>
     <header className="flex items-center justify-between border-b pb-5">
       <div><p className="text-xs font-bold uppercase tracking-widest text-blue-700">FleetOps</p>
         <h1 className="text-3xl font-bold">OOOFleet inventory</h1></div>
@@ -94,13 +100,28 @@ function FleetWorkspace() {
             </li>)}</ul>}
       </section>}
     </>}
-    {aiOpen && carrierId && <ProductionAiPanel key={carrierId} carrierId={carrierId} onClose={() => setAiOpen(false)} />}
+  {aiOpen && carrierId && <ProductionAiPanel key={carrierId} carrierId={carrierId} initialQuestion={initialQuestion} onClose={() => setAiOpen(false)} />}
   </main>;
+}
+
+function ProductionHome() {
+  const [entered, setEntered] = useState(false);
+  const [openAiOnEntry, setOpenAiOnEntry] = useState(false);
+  const [initialQuestion, setInitialQuestion] = useState("");
+
+  if (!entered) return <LandingPage mode="production"
+    onExplore={() => { setInitialQuestion(""); setOpenAiOnEntry(false); setEntered(true); }}
+    onTryCopilot={(question) => { setInitialQuestion(question); setOpenAiOnEntry(true); setEntered(true); }} />;
+
+  return <FleetWorkspace openAiOnEntry={openAiOnEntry} initialQuestion={initialQuestion} onBack={() => {
+    setEntered(false);
+    setOpenAiOnEntry(false);
+  }} />;
 }
 
 export function ProductionApp() {
   const publishableKey = window.__FLEETOPS_CONFIG__?.publishableKey?.startsWith("pk_")
     ? window.__FLEETOPS_CONFIG__.publishableKey : import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
   if (!publishableKey) return <main role="alert">FleetOps sign-in is not configured.</main>;
-  return <ClerkProvider publishableKey={publishableKey}><FleetWorkspace /></ClerkProvider>;
+  return <ClerkProvider publishableKey={publishableKey}><ProductionHome /></ClerkProvider>;
 }
