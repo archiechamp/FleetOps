@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: UUID
     messages: list[dict[str, Any]] = Field(min_length=1, max_length=25)
+    trigger: str | None = Field(default=None, max_length=32)
 
 
 class FeedbackRequest(BaseModel):

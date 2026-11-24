@@ -50,6 +50,7 @@ def test_unsupported_domain_answer_is_explicit(monkeypatch) -> None:
 
 
 def test_database_fallback_uses_authorized_facts_and_sources(monkeypatch) -> None:
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     client = _client(monkeypatch)
     monkeypatch.setattr(production_routes, "get_settings", lambda: Settings(env="production"))
     monkeypatch.setattr(production_routes, "gather_production_facts", lambda member, question: {
