@@ -10,6 +10,7 @@ ENV VITE_FLEETOPS_MODE=production
 RUN npm run build
 
 FROM caddy:2.11.9-alpine@sha256:003a97808e781aa9f7e75cc2f43d34d461099031faf5e20faefb9f61126836f0
+RUN apk upgrade --no-cache zlib
 COPY --from=build /workspace/apps/web/dist /srv
 COPY apps/web/Caddyfile.staging /etc/caddy/Caddyfile
 RUN adduser -D -u 10001 fleetops && chown -R fleetops:fleetops /srv /config /data
