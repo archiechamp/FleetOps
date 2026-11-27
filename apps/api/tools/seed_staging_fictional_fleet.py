@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, text
 
 from app.core.migration_config import migration_target
 
-EXPECTED_REVISION = "0005_production_readiness_grant"
+EXPECTED_REVISIONS = {"0005_production_readiness_grant", "0006_staging_operations"}
 STAGING_DATABASE = "fleetops-staging-db"
 DEMO_NAME = "FleetOps Staging (Fictional Demo)"
 NAMESPACE = UUID("7a2f672d-6209-4a7c-9940-637697223cde")
@@ -39,7 +39,7 @@ def seed() -> tuple[str, int]:
     try:
         with engine.begin() as connection:
             revision = connection.execute(text("SELECT version_num FROM dbo.alembic_version")).scalar_one()
-            if revision != EXPECTED_REVISION:
+            if revision not in EXPECTED_REVISIONS:
                 raise RuntimeError("Staging schema is not at the approved revision")
             connection.execute(text("""
                 DECLARE @selected UNIQUEIDENTIFIER = CONVERT(UNIQUEIDENTIFIER, :tenant);

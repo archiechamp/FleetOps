@@ -103,7 +103,7 @@ export function ProductionAiPanel({ carrierId, initialQuestion = "", onClose }: 
           <h2 className="text-xl font-bold">AI Fleet</h2></div>
         <button type="button" className="rounded border px-3 py-1" onClick={onClose}>Close</button>
       </div>
-      <p className="mt-2 text-sm text-slate-600">Fleet inventory questions for your selected carrier. Dispatch, GPS, maintenance and costs are not connected yet.</p>
+      <p className="mt-2 text-sm text-slate-600">Ask about this fictional carrier's fleet, dispatch, GPS, maintenance, documents, recorded costs, and reports. Answers cite permitted records.</p>
       {details && <p className="mt-2 text-xs text-slate-600">{details.configured ? details.model : "Verified database summaries"} · {details.daily_limit} questions/day</p>}
       <div className="mt-3 flex gap-2">
         <button type="button" className="rounded border px-3 py-1" onClick={() => { setConversationId(crypto.randomUUID()); setMessages([]); }}>New chat</button>

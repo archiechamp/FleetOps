@@ -33,7 +33,7 @@ it("keeps finance data out of a reader report", async () => {
   }));
   vi.stubGlobal("fetch", fetchMock);
   render(<DemoWorkspace view="Reports" carrierId="tenant-a" canCreate={false} canFinance={false} />);
-  expect(await screen.findByText(/Finance report requires creator permission/i)).toBeVisible();
+  expect(await screen.findByText(/Finance report requires carrier finance access/i)).toBeVisible();
   expect(fetchMock.mock.calls.every(([url]) => !url.endsWith("/costs"))).toBe(true);
 });
 

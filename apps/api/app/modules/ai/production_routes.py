@@ -17,6 +17,7 @@ from app.core.clerk_auth import ClerkMember, selected_clerk_member
 from app.core.config import get_settings
 from app.core.db import tenant_connection
 from app.core.production_db import get_production_engine
+from app.modules.ai.pilot_facts import gather_pilot_facts, requested_domain
 from app.modules.ai.production_facts import gather_production_facts
 from app.modules.ai.provider import ProviderQuotaExceeded, ProviderUnavailable, get_provider
 
@@ -25,6 +26,11 @@ _LIMIT = 25
 _MUTATION = re.compile(r"^\s*(?:please\s+)?(?:assign|cancel|delete|remove|pay|change|update|edit|release|mark|dispatch|create|register)\b", re.IGNORECASE)
 _UNAVAILABLE = re.compile(r"\b(?:gps|location|last seen|where|trip|dispatch|driver|maintenance|service|repair|due|cost|expense|fuel|toll|profit|revenue|cpm|document|insurance)\b", re.IGNORECASE)
 _CREDENTIAL = re.compile(r"sk-[A-Za-z0-9_-]{16,}|\b(?:api[_ -]?key|password|secret)\s*[:=]\s*\S+", re.IGNORECASE)
+
+
+def _pilot_enabled() -> bool:
+    settings = get_settings()
+    return settings.env == "production" and settings.database_name == "fleetops-staging-db"
 
 
 class ChatRequest(BaseModel):
@@ -170,7 +176,7 @@ def status(member: Annotated[ClerkMember, Depends(selected_clerk_member)]) -> di
     return {"configured": settings.openai_api_key is not None,
             "provider": settings.ai_provider, "model": settings.ai_model,
             "daily_limit": _LIMIT, "retention_days": None,
-            "scope": "fleet inventory only"}
+            "scope": "fictional staging fleet operations" if _pilot_enabled() else "fleet inventory only"}
 
 
 @router.post("/chat")
@@ -179,12 +185,16 @@ async def chat(body: ChatRequest,
     question = _question(body)
     history = await run_in_threadpool(_prepare, member, body.id, question)
     now = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+    domain = requested_domain(question) if _pilot_enabled() else None
     if _MUTATION.search(question):
         answer = "AI Fleet is read-only and cannot change carrier records. Use an authorized operations screen."
         bundle = {"sources": [], "queried_at": now}
-    elif _UNAVAILABLE.search(question):
+    elif domain == "unsupported" or (domain is None and _UNAVAILABLE.search(question)):
         answer = "That information is not connected to the production FleetOps data model yet. I cannot verify it from this carrier's records."
         bundle = {"sources": [], "queried_at": now}
+    elif domain is not None:
+        bundle = await run_in_threadpool(gather_pilot_facts, member, question, domain)
+        answer = bundle["answer"]
     else:
         bundle = await run_in_threadpool(gather_production_facts, member, question)
         if bundle.get("requested_units") and not bundle["named_asset_found"]:
