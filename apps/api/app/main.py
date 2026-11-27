@@ -30,9 +30,11 @@ def create_app() -> FastAPI:
     elif settings.env == "production":
         from app.modules.ai.production_routes import router as production_ai_router
         from app.modules.fleet.production_routes import router as production_fleet_router
+        from app.modules.pilot_operations_routes import router as pilot_operations_router
 
         app.include_router(production_fleet_router, prefix="/api/v1")
         app.include_router(production_ai_router, prefix="/api/v1")
+        app.include_router(pilot_operations_router, prefix="/api/v1")
 
         @app.exception_handler(SQLAlchemyError)
         async def unavailable_database(request: Request, error: SQLAlchemyError) -> JSONResponse:
@@ -61,7 +63,9 @@ def create_app() -> FastAPI:
             try:
                 with get_production_engine().connect() as connection:
                     revision = connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
-                if revision == "0005_production_readiness_grant":
+                expected = ("0006_staging_operations" if settings.database_name == "fleetops-staging-db"
+                            else "0005_production_readiness_grant")
+                if revision == expected:
                     return {"status": "ready"}
             except (SQLAlchemyError, RuntimeError):
                 raise HTTPException(status_code=503, detail="Service is not ready") from None

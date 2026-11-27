@@ -17,14 +17,19 @@ type Assignment = {
 };
 type Document = { id: string; asset_id: string; unit_number: string; kind: string; expires_on: string | null; file_name: string; uploaded_at: string };
 type Cost = { id: string; asset_id: string; unit_number: string; trip_reference: string | null; category: string; amount_usd: string; occurred_on: string };
+type Report = { equipment: { asset_type: "TRACTOR" | "TRAILER"; status: string; asset_count: number }[];
+  currency: "USD"; mileage_basis: string; cost_completeness: string; recorded_cost_total: string | null };
 
 const inputClass = "mt-1 w-full rounded-lg border border-slate-300 bg-white p-2 text-slate-900 focus-visible:outline-2 focus-visible:outline-blue-700";
 const buttonClass = "rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-700 disabled:opacity-50";
 
-async function request<T>(path: string, carrierId: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api/v1/demo${path}`, {
+type TokenGetter = () => Promise<string | null>;
+
+async function request<T>(path: string, carrierId: string, options: RequestInit = {}, getToken?: TokenGetter): Promise<T> {
+  const token = getToken ? await getToken() : null;
+  const response = await fetch(`/api/v1/${getToken ? "pilot" : "demo"}${path}`, {
     ...options,
-    headers: { "Content-Type": "application/json", "X-Demo-Request": "fleetops-ui", "X-Tenant-Id": carrierId, ...options.headers },
+    headers: { "Content-Type": "application/json", ...(getToken ? { Authorization: `Bearer ${token ?? ""}` } : { "X-Demo-Request": "fleetops-ui" }), "X-Tenant-Id": carrierId, ...options.headers },
   });
   if (!response.ok) {
     const body = (await response.json().catch(() => ({}))) as { detail?: string | { msg: string }[] };
@@ -34,14 +39,18 @@ async function request<T>(path: string, carrierId: string, options: RequestInit 
   return (await response.json()) as T;
 }
 
+function timestamp(value: string): Date {
+  return new Date(/(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : `${value}Z`);
+}
+
 function utc(value: string | null): string {
   if (!value) return "Unknown";
-  return new Date(`${value.endsWith("Z") ? value : `${value}Z`}`).toLocaleString(undefined, { timeZone: "UTC", timeZoneName: "short" });
+  return timestamp(value).toLocaleString(undefined, { timeZone: "UTC", timeZoneName: "short" });
 }
 
 function freshness(value: string | null): string {
   if (!value) return "No position";
-  const age = Date.now() - new Date(`${value.endsWith("Z") ? value : `${value}Z`}`).getTime();
+  const age = Date.now() - timestamp(value).getTime();
   return age > 60 * 60 * 1000 ? "Stale" : "Recent";
 }
 
@@ -87,13 +96,18 @@ async function fileBase64(file: File): Promise<string> {
   return btoa(binary);
 }
 
-export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
+export function DemoWorkspace({ view, carrierId, canCreate, canFinance, getToken,
+  canReadDocuments = canCreate, canWriteDocuments = canCreate,
+  canReadFinance = canFinance, canWriteFinance = canFinance }: {
   view: DemoView; carrierId: string; canCreate: boolean; canFinance: boolean;
+  getToken?: TokenGetter; canReadDocuments?: boolean; canWriteDocuments?: boolean;
+  canReadFinance?: boolean; canWriteFinance?: boolean;
 }) {
   const [assets, setAssets] = useState<Asset[]>([]);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [documents, setDocuments] = useState<Document[]>([]);
   const [costs, setCosts] = useState<Cost[]>([]);
+  const [report, setReport] = useState<Report | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -109,13 +123,14 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
 
   async function load(signal?: AbortSignal) {
     const data = await Promise.all([
-      request<Asset[]>("/assets", carrierId, { signal }),
-      request<Assignment[]>("/assignments", carrierId, { signal }),
-      canCreate ? request<Document[]>("/documents", carrierId, { signal }) : Promise.resolve([]),
-      canFinance ? request<Cost[]>("/costs", carrierId, { signal }) : Promise.resolve([]),
+      request<Asset[]>("/assets", carrierId, { signal }, getToken),
+      request<Assignment[]>("/assignments", carrierId, { signal }, getToken),
+      canReadDocuments ? request<Document[]>("/documents", carrierId, { signal }, getToken) : Promise.resolve([]),
+      canReadFinance ? request<Cost[]>("/costs", carrierId, { signal }, getToken) : Promise.resolve([]),
+      getToken ? request<Report>("/reports", carrierId, { signal }, getToken) : Promise.resolve(null),
     ]);
     if (signal?.aborted) return;
-    setAssets(data[0]); setAssignments(data[1]); setDocuments(data[2]); setCosts(data[3]);
+    setAssets(data[0]); setAssignments(data[1]); setDocuments(data[2]); setCosts(data[3]); setReport(data[4]);
     setAssetId((current) => current && data[0].some((asset) => asset.id === current) ? current : data[0][0]?.id ?? "");
   }
 
@@ -125,12 +140,12 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
       if (!controller.signal.aborted) setError(reason instanceof Error ? reason.message : "Could not load demo data");
     }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-  }, [carrierId, canCreate, canFinance]);
+  }, [carrierId, canCreate, canReadDocuments, canReadFinance, getToken]);
 
   async function submit(path: string, body: object, method = "POST") {
     setBusy(true); setError(""); setNotice("");
     try {
-      await request(path, carrierId, { method, body: JSON.stringify(body) });
+      await request(path, carrierId, { method, body: JSON.stringify(body) }, getToken);
       await load();
       setNotice("Saved to this demo carrier.");
     } catch (reason) {
@@ -141,8 +156,9 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
   async function downloadDocument(id: string, fileName: string) {
     setError("");
     try {
-      const response = await fetch(`/api/v1/demo/documents/${id}/file`, {
-        headers: { "X-Tenant-Id": carrierId },
+      const token = getToken ? await getToken() : null;
+      const response = await fetch(`/api/v1/${getToken ? "pilot" : "demo"}/documents/${id}/file`, {
+        headers: { "X-Tenant-Id": carrierId, ...(getToken ? { Authorization: `Bearer ${token ?? ""}` } : {}) },
       });
       if (!response.ok) throw new Error(`Could not open document (${response.status})`);
       const url = URL.createObjectURL(await response.blob());
@@ -157,18 +173,21 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
   const trucks = assets.filter((asset) => asset.asset_type === "TRACTOR");
   const trailers = assets.filter((asset) => asset.asset_type === "TRAILER");
   const selected = assets.find((asset) => asset.id === assetId);
-  const activeAssignments = assignments.filter((item) => new Date(`${item.ends_at}Z`).getTime() > Date.now());
-  const currentAssignments = activeAssignments.filter((item) => new Date(`${item.starts_at}Z`).getTime() <= Date.now());
+  const activeAssignments = assignments.filter((item) => timestamp(item.ends_at).getTime() > Date.now());
+  const currentAssignments = activeAssignments.filter((item) => timestamp(item.starts_at).getTime() <= Date.now());
   const available = assets.filter((asset) => asset.status === "AVAILABLE" && !currentAssignments.some((item) => item.truck_asset_id === asset.id || item.trailer_asset_id === asset.id)).length;
   const serviceDue = trucks.filter((asset) => asset.service_due_date && asset.service_due_date <= new Date().toISOString().slice(0, 10)
     || asset.service_due_miles != null && asset.odometer_miles != null && asset.odometer_miles >= asset.service_due_miles).length;
-  const totalCostCents = costs.reduce((sum, cost) => sum + cents(cost.amount_usd), 0);
+  const totalCostCents = report?.recorded_cost_total != null ? cents(report.recorded_cost_total) : costs.reduce((sum, cost) => sum + cents(cost.amount_usd), 0);
   const money = (value: number) => value.toLocaleString("en-US", { style: "currency", currency: "USD" });
-  const statuses = ["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "MAINTENANCE", "OUT_OF_SERVICE", "INACTIVE"].map((label) => ({ label, value: assets.filter((asset) => asset.status === label).length }));
+  const statuses = ["AVAILABLE", "ASSIGNED", "IN_TRANSIT", "MAINTENANCE", "OUT_OF_SERVICE", "INACTIVE"].map((label) => ({ label,
+    value: report ? report.equipment.filter((row) => row.status === label).reduce((sum, row) => sum + row.asset_count, 0)
+      : assets.filter((asset) => asset.status === label).length }));
   const costBars = ["FUEL", "MAINTENANCE", "TOLLS", "OTHER"].map((label) => ({ label, value: costs.filter((cost) => cost.category === label).reduce((sum, cost) => sum + cents(cost.amount_usd), 0) / 100 }));
   const reportAssets = assets.filter((asset) => reportStatus === "ALL" || asset.status === reportStatus);
   const reportCosts = costs.filter((cost) => (!reportFrom || cost.occurred_on >= reportFrom) && (!reportTo || cost.occurred_on <= reportTo));
-  const reportTotalCents = reportCosts.reduce((sum, cost) => sum + cents(cost.amount_usd), 0);
+  const reportTotalCents = !reportFrom && !reportTo ? totalCostCents : reportCosts.reduce((sum, cost) => sum + cents(cost.amount_usd), 0);
+  const reportEquipment = report ? report.equipment.filter((row) => reportStatus === "ALL" || row.status === reportStatus) : null;
   const reportCostBars = costBars.map((row) => ({ label: row.label, value: reportCosts.filter((cost) => cost.category === row.label).reduce((sum, cost) => sum + cents(cost.amount_usd), 0) / 100 }));
 
   if (loading) return <p role="status">Loading demo {view.toLowerCase()}…</p>;
@@ -178,7 +197,7 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
     {notice && <p role="status" className="rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">{notice}</p>}
 
     {view === "Fleet" && <div className="grid gap-6 lg:grid-cols-2">
-      <Panel title="VFleet inventory">
+      <Panel title="Fleet inventory">
         {assets.length === 0 ? <p>No equipment registered.</p> : <ul className="divide-y divide-slate-200">{assets.map((asset) =>
           <li key={asset.id} className="py-3"><strong>{asset.unit_number}</strong> · {asset.asset_type === "TRACTOR" ? "Truck" : "Trailer"} · {asset.status}<br />
             <span className="text-sm text-slate-600">{asset.model_year} {asset.make} {asset.model} · {asset.ownership_type} · {asset.terminal ?? "No terminal"} · {asset.odometer_miles == null ? "Odometer unknown" : `${asset.odometer_miles} mi`}</span></li>)}</ul>}
@@ -201,13 +220,15 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
 
     {view === "Overview" && <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[ ["Trucks", trucks.length], ["Trailers", trailers.length], ["Available equipment", available], ["Service due", serviceDue] ].map(([label, value]) =>
+        {[ ["Trucks", report ? report.equipment.filter((row) => row.asset_type === "TRACTOR").reduce((sum, row) => sum + row.asset_count, 0) : trucks.length],
+          ["Trailers", report ? report.equipment.filter((row) => row.asset_type === "TRAILER").reduce((sum, row) => sum + row.asset_count, 0) : trailers.length],
+          ["Available equipment in view", available], ["Service due in view", serviceDue] ].map(([label, value]) =>
           <div key={label} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"><p className="text-sm text-slate-600">{label}</p><strong className="mt-2 block text-3xl">{value}</strong></div>)}
       </div>
       <div className="grid gap-6 lg:grid-cols-2"><Panel title="Fleet status"><BarChart title="Equipment by operating status" rows={statuses} /></Panel>
         <Panel title="Dispatch and GPS"><p>{activeAssignments.length} assignment(s) with an end time in the future.</p>
           <p className="mt-2">{trucks.filter((asset) => freshness(asset.gps_observed_at) === "Stale").length} truck(s) have stale last known positions.</p>
-          <p className="mt-4 text-sm text-slate-600">GPS records here are fictional or manually entered demo observations, not live tracking.</p></Panel></div>
+          <p className="mt-4 text-sm text-slate-600">GPS records here are fictional or manually entered observations, not live tracking.</p></Panel></div>
     </>}
 
     {view === "Dispatch" && <div className="grid gap-6 lg:grid-cols-2">
@@ -216,7 +237,7 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
           <li key={item.id} className="py-3"><strong>{item.trip_reference}</strong> · {item.truck_unit}{item.trailer_unit ? ` + ${item.trailer_unit}` : ""}<br />
             <span className="text-sm text-slate-600">{utc(item.starts_at)} to {utc(item.ends_at)}</span></li>)}</ul>}
       </Panel>
-      <Panel title="Assign equipment to a demo trip">
+      <Panel title={getToken ? "Assign equipment to a fictional trip" : "Assign equipment to a demo trip"}>
         {canCreate ? <form className="grid gap-3" onSubmit={(event: FormEvent<HTMLFormElement>) => {
           event.preventDefault(); const data = new FormData(event.currentTarget);
           void submit("/assignments", { trip_reference: String(data.get("trip_reference")), truck_asset_id: data.get("truck"),
@@ -289,14 +310,14 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
 
     {view === "Documents" && <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Registration and insurance records">
-        {!canCreate ? <p>Document access requires creator permission.</p> : documents.length === 0 ? <p>No documents uploaded for this carrier.</p> :
+        {!canReadDocuments ? <p>Document access is restricted.</p> : documents.length === 0 ? <p>No documents uploaded for this carrier.</p> :
           <ul className="divide-y divide-slate-200">{documents.map((item) => <li key={item.id} className="py-3">
             <strong>{item.unit_number}</strong> · {item.kind}<br /><span className="text-sm">Expires {item.expires_on ?? "not recorded"} · {item.file_name}</span><br />
             <button type="button" className="font-semibold text-blue-700 underline" onClick={() => { void downloadDocument(item.id, item.file_name); }}>Download private file</button>
           </li>)}</ul>}
       </Panel>
       <Panel title="Upload a demo document">
-        {canCreate ? <form className="grid gap-3" onSubmit={async (event) => {
+        {canWriteDocuments ? <form className="grid gap-3" onSubmit={async (event) => {
           event.preventDefault(); if (!file) return;
           const data = new FormData(event.currentTarget);
           if (file.size > 1024 * 1024) { setError("File must be 1 MB or smaller"); return; }
@@ -309,21 +330,21 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
           <label>Expiration date<input className={inputClass} name="expires" type="date" /></label>
           <label>Private file (PDF, PNG or JPEG; 1 MB maximum)<input className={inputClass} type="file" accept=".pdf,.png,.jpg,.jpeg" required onChange={(event) => setFile(event.target.files?.[0] ?? null)} /></label>
           <button className={buttonClass} disabled={busy || !file || assets.length === 0}>Upload document</button>
-          <p className="text-sm text-slate-600">Local demo storage only. Files are restricted to creator sessions; no malware scan or production document review is provided.</p>
+          <p className="text-sm text-slate-600">Files are restricted to authorized carrier members. No malware scan or production document review is provided.</p>
         </form> : <p>Read-only account.</p>}
       </Panel>
     </div>}
 
     {view === "Costs" && <div className="grid gap-6 lg:grid-cols-2">
       <Panel title="Recorded operating costs">
-        {!canFinance ? <p>Finance access is restricted to creator accounts.</p> : <><p className="mb-3 text-2xl font-bold">{money(totalCostCents / 100)} <span className="text-sm font-normal text-slate-600">recorded USD costs</span></p>
+        {!canReadFinance ? <p>Finance access is restricted.</p> : <><p className="mb-3 text-2xl font-bold">{money(totalCostCents / 100)} <span className="text-sm font-normal text-slate-600">recorded USD costs{report ? " for this carrier" : " in view"}</span></p>
           {costs.length === 0 ? <p>No costs recorded.</p> : <ul className="divide-y divide-slate-200">{costs.map((item) => <li key={item.id} className="py-2">
             <strong>{money(cents(item.amount_usd) / 100)}</strong> · {item.category} · {item.unit_number}<br /><span className="text-sm text-slate-600">{item.occurred_on}{item.trip_reference ? ` · ${item.trip_reference}` : ""}</span>
           </li>)}</ul>}
           <p className="mt-4 text-sm text-slate-600">Coverage is unknown; missing expenses are not zero. These costs are not net profit.</p></>}
       </Panel>
-      <Panel title="Add a demo expense">
-        {canFinance ? <form className="grid gap-3" onSubmit={(event) => {
+      <Panel title={getToken ? "Add a fictional staging expense" : "Add a demo expense"}>
+        {canWriteFinance ? <form className="grid gap-3" onSubmit={(event) => {
           event.preventDefault(); const data = new FormData(event.currentTarget);
           void submit("/costs", { asset_id: data.get("asset"), trip_reference: data.get("trip") || null,
             category, amount_usd: String(data.get("amount")), occurred_on: data.get("date") });
@@ -341,29 +362,30 @@ export function DemoWorkspace({ view, carrierId, canCreate, canFinance }: {
     {view === "Reports" && <>
       <Panel title="Fleet report"><div className="mb-4 flex flex-wrap items-end gap-3">
         <label>Status filter<select className={inputClass} value={reportStatus} onChange={(event) => setReportStatus(event.target.value)}><option value="ALL">All statuses</option>{statuses.map((item) => <option key={item.label}>{item.label}</option>)}</select></label>
-        <button className={buttonClass} onClick={() => downloadCsv("fleet-demo-inventory.csv", [
+        <button className={buttonClass} onClick={() => downloadCsv(getToken ? "fleet-staging-inventory.csv" : "fleet-demo-inventory.csv", [
           ["Carrier ID", "Unit", "Type", "Status", "Ownership", "Terminal", "Odometer miles"],
           ...reportAssets.map((asset) => [carrierId, asset.unit_number, asset.asset_type, asset.status, asset.ownership_type, asset.terminal, asset.odometer_miles]),
         ])}>Export filtered fleet CSV</button>
       </div><div className="grid gap-6 lg:grid-cols-2">
-        <BarChart title="Equipment by type" rows={[{ label: "Trucks", value: reportAssets.filter((asset) => asset.asset_type === "TRACTOR").length }, { label: "Trailers", value: reportAssets.filter((asset) => asset.asset_type === "TRAILER").length }]} />
-        <BarChart title="Equipment by status" rows={statuses.map((row) => ({ label: row.label, value: reportAssets.filter((asset) => asset.status === row.label).length }))} />
-      </div><p className="mt-4 text-sm text-slate-600">Current carrier only. Counts reflect the displayed filter and saved demo records.</p></Panel>
-      {canFinance ? <Panel title="Operating cost report"><div className="grid gap-6 lg:grid-cols-2">
+        <BarChart title="Equipment by type" rows={[{ label: "Trucks", value: reportEquipment ? reportEquipment.filter((row) => row.asset_type === "TRACTOR").reduce((sum, row) => sum + row.asset_count, 0) : reportAssets.filter((asset) => asset.asset_type === "TRACTOR").length }, { label: "Trailers", value: reportEquipment ? reportEquipment.filter((row) => row.asset_type === "TRAILER").reduce((sum, row) => sum + row.asset_count, 0) : reportAssets.filter((asset) => asset.asset_type === "TRAILER").length }]} />
+        <BarChart title="Equipment by status" rows={statuses.map((row) => ({ label: row.label, value: reportEquipment ? reportEquipment.filter((item) => item.status === row.label).reduce((sum, item) => sum + item.asset_count, 0) : reportAssets.filter((asset) => asset.status === row.label).length }))} />
+      </div><p className="mt-4 text-sm text-slate-600">Current carrier only. Charts use {report ? "server totals" : "saved demo records"}; CSV exports the displayed equipment list, up to 100 rows.</p></Panel>
+      {canReadFinance ? <Panel title="Operating cost report"><div className="grid gap-6 lg:grid-cols-2">
         <div className="lg:col-span-2 flex flex-wrap items-end gap-3">
           <label>From date<input className={inputClass} type="date" value={reportFrom} onChange={(event) => setReportFrom(event.target.value)} /></label>
           <label>To date<input className={inputClass} type="date" value={reportTo} onChange={(event) => setReportTo(event.target.value)} /></label>
-          <button className={buttonClass} onClick={() => downloadCsv("fleet-demo-costs.csv", [
+          <button className={buttonClass} onClick={() => downloadCsv(getToken ? "fleet-staging-costs.csv" : "fleet-demo-costs.csv", [
             ["Carrier ID", "Date", "Unit", "Trip reference", "Category", "Amount USD", "Completeness"],
             ...reportCosts.map((cost) => [carrierId, cost.occurred_on, cost.unit_number, cost.trip_reference, cost.category, cost.amount_usd, "Unknown"]),
           ])}>Export filtered costs CSV</button>
         </div>
         <BarChart title="Recorded USD by category" rows={reportCostBars} />
-        <div><p className="text-3xl font-bold">{money(reportTotalCents / 100)}</p><p>Recorded costs in selected date range</p>
+        <div><p className="text-3xl font-bold">{money(reportTotalCents / 100)}</p><p>{report && !reportFrom && !reportTo ? "Recorded costs for this carrier" : "Recorded costs in displayed date range"}</p>
+          {getToken && (reportFrom || reportTo) && <p className="text-sm text-slate-600">Date filtered rows are limited to the latest 200 entries; this is not a full period total.</p>}
           <dl className="mt-4 space-y-2 text-sm"><div><dt className="font-semibold">Mileage basis</dt><dd>Unavailable — no period distance records</dd></div>
             <div><dt className="font-semibold">Cost per mile</dt><dd>Unavailable</dd></div>
             <div><dt className="font-semibold">Data completeness</dt><dd>Unknown — required cost categories are not reconciled</dd></div></dl></div>
-      </div></Panel> : <Panel title="Operating cost report"><p>Finance report requires creator permission.</p></Panel>}
+      </div></Panel> : <Panel title="Operating cost report"><p>Finance report requires carrier finance access.</p></Panel>}
     </>}
   </div>;
 }

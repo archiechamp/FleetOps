@@ -1,5 +1,7 @@
 # Fictional staging fleet inventory
 
+This document covers the earlier inventory seed. For the next hosted feature release and its `0006` migration, use [Fictional staging operations release](staging-fictional-operations.md). The inventory seed now accepts either `0005_production_readiness_grant` or `0006_staging_operations`; the statements below about unavailable hosted features describe the earlier inventory-only release.
+
 This procedure populates **only** the existing Azure SQL database
 `fleetops-staging-db`. It does not copy the local demo database, seed a
 production carrier, or enable dispatch, GPS, maintenance, or costs in the
@@ -11,7 +13,7 @@ already-onboarded Clerk pilot carrier.
 
 1. Confirm the approved staging tenant UUID and record its current name.
    Confirm that it has no real or unrelated assets.
-2. Confirm Azure SQL is at `0005_production_readiness_grant` and that the
+2. Confirm Azure SQL is at `0005_production_readiness_grant` or `0006_staging_operations` and that the
    migration job can reach the private SQL endpoint with verified TLS.
 3. Build and scan the API image containing
    `tools/seed_staging_fictional_fleet.py`. Use its immutable digest.

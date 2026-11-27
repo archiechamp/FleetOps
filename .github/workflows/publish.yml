@@ -54,7 +54,7 @@ jobs:
           api_digest="$(docker push "$api" | awk '/digest: sha256:/ {print $3}' | tail -1)"
           web_digest="$(docker push "$web" | awk '/digest: sha256:/ {print $3}' | tail -1)"
           test -n "$api_digest" && test -n "$web_digest"
-          printf '{"commit":"%s","sql_revision":"0005_production_readiness_grant","api":"ghcr.io/%s/fleetops-api@%s","web":"ghcr.io/%s/fleetops-web@%s"}\n' \
+          printf '{"commit":"%s","sql_revision":"0006_staging_operations","api":"ghcr.io/%s/fleetops-api@%s","web":"ghcr.io/%s/fleetops-web@%s"}\n' \
             "$GITHUB_SHA" "$owner" "$api_digest" "$owner" "$web_digest" > release-manifest.json
           cat release-manifest.json >> "$GITHUB_STEP_SUMMARY"
       - name: Preserve immutable release manifest

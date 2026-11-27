@@ -2,6 +2,7 @@ import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useAuth } from "@clerk/react";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { hostedErrorDetail } from "./hostedApi";
 
 type Source = { kind: string; id: string; label: string; updated_at: string | null };
 type Conversation = { id: string; title: string | null; updated_at: string };
@@ -34,8 +35,8 @@ export function ProductionAiPanel({ carrierId, initialQuestion = "", onClose }: 
       headers.set("X-Tenant-Id", carrierId);
       const response = await fetch(url, { ...init, headers });
       if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { detail?: string };
-        throw new Error(body.detail || `AI Fleet request failed (${response.status})`);
+        const body = (await response.json().catch(() => ({}))) as { detail?: unknown };
+        throw new Error(hostedErrorDetail(body.detail, `AI Fleet request failed (${response.status})`));
       }
       return response;
     },
@@ -102,7 +103,7 @@ export function ProductionAiPanel({ carrierId, initialQuestion = "", onClose }: 
           <h2 className="text-xl font-bold">AI Fleet</h2></div>
         <button type="button" className="rounded border px-3 py-1" onClick={onClose}>Close</button>
       </div>
-      <p className="mt-2 text-sm text-slate-600">Fleet inventory questions for your selected carrier. Dispatch, GPS, maintenance and costs are not connected yet.</p>
+      <p className="mt-2 text-sm text-slate-600">Ask about this fictional carrier's fleet, dispatch, GPS, maintenance, documents, recorded costs, and reports. Answers cite permitted records.</p>
       {details && <p className="mt-2 text-xs text-slate-600">{details.configured ? details.model : "Verified database summaries"} · {details.daily_limit} questions/day</p>}
       <div className="mt-3 flex gap-2">
         <button type="button" className="rounded border px-3 py-1" onClick={() => { setConversationId(crypto.randomUUID()); setMessages([]); }}>New chat</button>

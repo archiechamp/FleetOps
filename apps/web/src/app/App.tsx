@@ -3,6 +3,7 @@ import { VehicleRegistrationForm } from "../features/vehicles/VehicleRegistratio
 import { DemoWorkspace, type DemoView } from "../features/demo/DemoWorkspace";
 import { CopilotPanel } from "../features/ai/CopilotPanel";
 import { LandingPage } from "../features/landing/LandingPage";
+import { CarrierBar, WorkspaceHeader, WorkspaceNav } from "./WorkspaceChrome";
 import type { components } from "../../../../packages/api-contracts/vehicle-openapi";
 
 type Vehicle = components["schemas"]["Vehicle"];
@@ -161,15 +162,10 @@ export function App() {
 
   return (
     <main id="main-content" className="mx-auto max-w-6xl p-6 md:p-10">
-      <header className="mb-8 flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-6">
-        <div>
-          <p className="text-sm font-bold uppercase tracking-[0.24em] text-blue-700">FleetOps · Local demo</p>
-          <h1 className="mt-2 text-4xl font-bold tracking-tight text-slate-900">Fleet vehicles</h1>
-          <p className="mt-2 text-slate-600">Register and inspect trucks for an authorized carrier.</p>
-        </div>
-        {me && <div className="flex gap-2"><button type="button" className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={() => setChatOpen(true)}>Ask Fleet</button>
-          <button className="rounded-lg border px-4 py-2 font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={signOut}>Sign out</button></div>}
-      </header>
+      <WorkspaceHeader environment="Local demo" actions={me && <>
+        <button type="button" className="rounded-lg bg-blue-700 px-4 py-2 font-medium text-white hover:bg-blue-800 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={() => setChatOpen(true)}>Ask Fleet</button>
+        <button className="rounded-lg border px-4 py-2 font-medium hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-blue-700" onClick={signOut}>Sign out</button>
+      </>} />
 
       {checking ? <p role="status">Checking demo session…</p> : !me ? (
         <section className="max-w-md rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -187,22 +183,11 @@ export function App() {
         </section>
       ) : (
         <>
-          <section className="mb-6 flex flex-wrap items-end justify-between gap-4 rounded-2xl bg-slate-900 p-5 text-white">
-            <div><label htmlFor="carrier" className="block text-sm font-semibold text-slate-300">Carrier</label>
-              <select id="carrier" className="mt-1 min-w-64 rounded-lg bg-white p-2 text-slate-900" value={carrierId} onChange={(event) => setCarrierId(event.target.value)}>
-                {me.carriers.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-              </select></div>
-            <div className="text-sm text-slate-300">Signed in as <strong className="text-white">{me.username}</strong><br />{canCreate ? "Can register trucks" : "Read-only access"}</div>
-          </section>
+          <CarrierBar id={carrierId} carriers={me.carriers} onChange={setCarrierId} account={me.username}
+            access={canCreate ? "Can register trucks" : "Read-only access"} />
           {error && <p role="alert" className="mb-4 rounded-lg border border-red-200 bg-red-50 p-3 text-red-800">{error}</p>}
           {notice && <p role="status" className="mb-4 rounded-lg border border-green-200 bg-green-50 p-3 text-green-800">{notice}</p>}
-          <nav aria-label="Demo sections" className="mb-6 flex flex-wrap gap-2">
-            {(["Overview", "Fleet", "Dispatch", "GPS", "Maintenance", "Documents", "Costs", "Reports"] as DemoView[]).map((item) => (
-              <button key={item} type="button" aria-current={view === item ? "page" : undefined}
-                className={`rounded-lg px-4 py-2 text-sm font-semibold focus-visible:outline-2 focus-visible:outline-blue-700 ${view === item ? "bg-blue-700 text-white" : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-100"}`}
-                onClick={() => setView(item)}>{item}</button>
-            ))}
-          </nav>
+          <WorkspaceNav view={view} onChange={setView} />
           {chatOpen && carrier && <CopilotPanel key={carrierId} carrierId={carrierId} carrierName={carrier.name}
             canFinance={carrier.permissions.includes("demo.finance.read")}
             initialQuestion={entryQuestion}

@@ -330,7 +330,7 @@ All protected APIs live under `/api/v1`, accept a verified user session, and res
 | DEV-007 | VS Code tasks, debugging instructions and extension recommendations are maintained alongside the code. |
 | DEV-008 | Generate code and executable tests in the same feature change. The first vehicle workflow must pass unit, real SQL Server integration and Selenium browser suites locally and in pull-request CI. Later features extend coverage for each changed behavior and user journey. |
 
-Delivery design and scaffolding sequence: [`docs/development-and-delivery.md`](docs/development-and-delivery.md). The app and pipeline do not exist yet.
+Delivery design and scaffolding sequence: [`docs/development-and-delivery.md`](docs/development-and-delivery.md). The repository now contains a runnable local demo, a limited hosted staging slice, and CI workflows. The `0006` hosted operations expansion is a release candidate until its migration, API and web images, fictional seed, and live checks are verified.
 
 ## 15. Reference links (verify current versions)
 

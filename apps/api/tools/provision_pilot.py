@@ -9,7 +9,7 @@ from sqlalchemy import create_engine, text
 
 from app.core.migration_config import migration_target
 
-EXPECTED_REVISION = "0005_production_readiness_grant"
+EXPECTED_REVISIONS = {"0005_production_readiness_grant", "0006_staging_operations"}
 
 
 def inputs() -> tuple[str, str, str, str]:
@@ -39,7 +39,7 @@ def provision() -> tuple[str, str]:
     try:
         with engine.begin() as connection:
             revision = connection.execute(text("SELECT version_num FROM dbo.alembic_version")).scalar_one()
-            if revision != EXPECTED_REVISION:
+            if revision not in EXPECTED_REVISIONS:
                 raise RuntimeError("Production schema is not at the approved revision")
             connection.execute(text("""
                 IF NOT EXISTS (SELECT 1 FROM ref.currencies WHERE code='USD')
